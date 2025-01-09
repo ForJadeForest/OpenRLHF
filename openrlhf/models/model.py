@@ -13,6 +13,7 @@ from openrlhf.utils.logging_utils import init_logger
 
 from .ring_attn_utils import convert_ring_attn_params
 from .utils import reset_position_ids
+from ..utils.utils import get_conditional_generation_cls
 
 logger = init_logger(__name__)
 
@@ -73,8 +74,7 @@ def get_llm_for_sequence_regression(
     # Prioritize using the value_head_prefix in the model configuration.
     value_head_prefix = getattr(config, "value_head_prefix", value_head_prefix)
     logger.info(f"set value_head_prefix to `{value_head_prefix}`")
-
-    base_class = AutoModel._model_mapping[type(config)]
+    base_class = get_conditional_generation_cls(config)
     base_pretrained_class = base_class.__base__
     if model_type == "reward":
         cls_class = _get_reward_model(base_pretrained_class, base_class, value_head_prefix, packing_samples)
@@ -98,17 +98,34 @@ def get_llm_for_sequence_regression(
         )
     else:
         nf4_config = None
-
-    model = cls_class.from_pretrained(
-        model_name_or_path,
-        config=config,
-        trust_remote_code=True,
-        torch_dtype=torch.bfloat16 if bf16 else "auto",
-        quantization_config=nf4_config,
-        device_map=device_map,
-        **kwargs,
-    )
-
+    arch = config.architectures[0]
+    if arch in ["RewardModel", "CriticModel"]:
+        # we are loading from pretrained RewardModel or CriticModel
+        model = cls_class.from_pretrained(
+            model_name_or_path,
+            config=config,
+            trust_remote_code=True,
+            torch_dtype=torch.bfloat16 if bf16 else "auto",
+            quantization_config=nf4_config,
+            device_map=device_map,
+            **kwargs,
+        )
+    else:
+        # we are initializing from pretrained Model
+        model = cls_class._from_config(config,torch_dtype=torch.bfloat16 if bf16 else "auto")
+        '''
+        base_model = base_class.from_pretrained(
+            model_name_or_path,
+            config=config,
+            trust_remote_code=True,
+            torch_dtype=torch.bfloat16 if bf16 else "auto",
+            quantization_config=nf4_config,
+            device_map=device_map,
+            **kwargs,
+        )
+        setattr(model, model.base_model_prefix, base_model)
+        '''
+   
     # LoRA
     if lora_rank > 0:
         model.enable_input_require_grads()
@@ -186,13 +203,16 @@ def _get_reward_model(base_pretrained_model, base_llm_model, value_head_prefix="
             return_output=False,
             ring_attn_group=None,
             packed_seq_lens=None,
+            visual_inputs={},
         ) -> torch.Tensor:
             if not self.packing_samples:
                 # https://github.com/OpenRLHF/OpenRLHF/issues/217
                 position_ids = attention_mask.long().cumsum(-1) - 1
                 position_ids.masked_fill_(attention_mask == 0, 1)
             else:
+                raise NotImplementedError("Packing samples is not supported currently")
                 # convert attention_mask to position_ids
+                # FIXME: use inputs_embeds instead of input_ids
                 if ring_attn_group is not None:
                     input_ids, attention_mask, position_ids = convert_ring_attn_params(
                         input_ids, attention_mask, packed_seq_lens, ring_attn_group
@@ -203,9 +223,14 @@ def _get_reward_model(base_pretrained_model, base_llm_model, value_head_prefix="
                 attention_mask = None
 
             outputs = getattr(self, self.base_model_prefix)(
-                input_ids, attention_mask=attention_mask, position_ids=position_ids
+                input_ids=input_ids, attention_mask=attention_mask, position_ids=position_ids,output_hidden_states=True, **visual_inputs
             )
-            last_hidden_states = outputs["last_hidden_state"]
+            if "last_hidden_state" in outputs:
+                last_hidden_states = outputs["last_hidden_state"]
+            elif "hidden_states" in outputs:
+                last_hidden_states = outputs["hidden_states"][-1]
+            else:
+                raise ValueError("outputs should contain either last_hidden_state or hidden_states")
             values = getattr(self, self.value_head_prefix)(last_hidden_states).squeeze(-1)
 
             if self.packing_samples:
@@ -259,6 +284,7 @@ def _get_critic_model(base_pretrained_model, base_llm_model, value_head_prefix="
             attention_mask: Optional[torch.Tensor] = None,
             return_output=False,
             packed_seq_lens=None,
+            visual_inputs={},
         ) -> torch.Tensor:
             if not self.packing_samples:
                 # https://github.com/OpenRLHF/OpenRLHF/issues/217
@@ -271,9 +297,14 @@ def _get_critic_model(base_pretrained_model, base_llm_model, value_head_prefix="
                 attention_mask = None
 
             outputs = getattr(self, self.base_model_prefix)(
-                input_ids, attention_mask=attention_mask, position_ids=position_ids
+                input_ids=input_ids, attention_mask=attention_mask, position_ids=position_ids,output_hidden_states=True, **visual_inputs
             )
-            last_hidden_states = outputs["last_hidden_state"]
+            if "last_hidden_state" in outputs:
+                last_hidden_states = outputs["last_hidden_state"]
+            elif "hidden_states" in outputs:
+                last_hidden_states = outputs["hidden_states"][-1]
+            else:
+                raise ValueError("outputs should contain either last_hidden_state or hidden_states")
             values = getattr(self, self.value_head_prefix)(last_hidden_states).squeeze(-1)[:, :-1]
 
             # normalize reward

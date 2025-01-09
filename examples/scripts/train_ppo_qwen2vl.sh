@@ -1,0 +1,27 @@
+deepspeed --include localhost:4,5,6,7 --module openrlhf.cli.train_ppo \
+   --pretrain ckpts/Qwen2-VL-2B-Instruct \
+   --reward_pretrain ckpts/Qwen2-VL-2B-Instruct\
+   --save_path ckpts/Qwen2-VL-2B-Instruct-rlhf \
+   --save_steps -1 \
+   --logging_steps 1 \
+   --eval_steps -1 \
+   --micro_train_batch_size 2 \
+   --train_batch_size 128 \
+   --micro_rollout_batch_size 4 \
+   --rollout_batch_size 1024 \
+   --max_epochs 1 \
+   --target_modules q_proj \
+   --generate_max_len 10 \
+   --zero_stage 0 \
+   --bf16 \
+   --lora_rank 128 \
+   --actor_learning_rate 5e-7 \
+   --critic_learning_rate 9e-6 \
+   --init_kl_coef 0.01 \
+   --prompt_data data/prompts.json \
+   --input_key message \
+   --max_samples 100000 \
+   --normalize_reward \
+   --adam_offload \
+   --flash_attn \
+   --gradient_checkpointing
