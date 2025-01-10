@@ -113,7 +113,6 @@ def get_llm_for_sequence_regression(
     else:
         # we are initializing from pretrained Model
         model = cls_class._from_config(config,torch_dtype=torch.bfloat16 if bf16 else "auto")
-        '''
         base_model = base_class.from_pretrained(
             model_name_or_path,
             config=config,
@@ -124,7 +123,7 @@ def get_llm_for_sequence_regression(
             **kwargs,
         )
         setattr(model, model.base_model_prefix, base_model)
-        '''
+        
    
     # LoRA
     if lora_rank > 0:
