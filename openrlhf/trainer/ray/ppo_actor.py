@@ -13,7 +13,7 @@ from openrlhf.datasets import PromptDataset, SFTDataset
 from openrlhf.models import Actor
 from openrlhf.trainer import PPOTrainer
 from openrlhf.trainer.ppo_utils import Experience, RemoteExperienceMaker
-from openrlhf.utils import blending_datasets, get_tokenizer
+from openrlhf.utils import blending_datasets, get_vl_processor
 from openrlhf.utils.deepspeed import DeepspeedStrategy
 from openrlhf.utils.distributed_util import init_process_group
 
@@ -45,7 +45,7 @@ class ActorPPOTrainer(PPOTrainer):
             self.critic,
             self.reward_model,
             self.initial_model,
-            self.tokenizer,
+            self.data_processor,
             self.prompt_max_len,
             self.kl_ctl,
             self.strategy,
@@ -201,7 +201,7 @@ class ActorModelRayActor(BasePPORole):
         strategy.print(actor)
 
         # configure tokenizer
-        self.tokenizer = get_tokenizer(
+        self.processor = get_vl_processor(
             pretrain, actor.model, "left", strategy, use_fast=not strategy.args.disable_fast_tokenizer
         )
 
@@ -281,13 +281,14 @@ class ActorModelRayActor(BasePPORole):
         )
         prompts_data = prompts_data.select(range(min(args.max_samples, len(prompts_data))))
         self.prompts_dataset = PromptDataset(
-            prompts_data, self.tokenizer, strategy, input_template=args.input_template
+            prompts_data, self.processor, strategy, input_template=args.input_template
         )
         self.prompts_dataloader = strategy.setup_dataloader(
             self.prompts_dataset, args.rollout_batch_size // strategy.world_size, True, True
         )
 
         if args.pretrain_data:
+            raise NotImplementedError("Pretrain data is not supported")
             pretrain_data = blending_datasets(
                 args.pretrain_data,
                 args.pretrain_data_probs,
@@ -362,7 +363,7 @@ class ActorModelRayActor(BasePPORole):
             micro_rollout_batch_size=args.micro_rollout_batch_size,
             gradient_checkpointing=args.gradient_checkpointing,
             critic_train_remote=critic_train_remote,
-            tokenizer=self.tokenizer,
+            processor=self.processor,
             prompt_max_len=args.prompt_max_len,
             value_clip=args.value_clip,
             eps_clip=args.eps_clip,
@@ -379,8 +380,8 @@ class ActorModelRayActor(BasePPORole):
             max_length=args.max_len,
             temperature=args.temperature,
             top_p=args.top_p,
-            pad_token_id=self.tokenizer.pad_token_id,
-            eos_token_id=self.tokenizer.eos_token_id,
+            pad_token_id=self.processor.pad_token_id,
+            eos_token_id=self.processor.eos_token_id,
         )
 
         # broadcast checkpoint

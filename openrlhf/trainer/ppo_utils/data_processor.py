@@ -12,7 +12,7 @@ class BaseDataProcessor(ABC):
         self.processor = processor
     
     @abstractmethod
-    def __call__(self, messages: List[List[str]], max_length: int, padding: bool = True, device: Optional[Union[str,torch.device]]=None) -> dict:
+    def __call__(self, messages: Union[dict,List[str],str], max_length: int, padding: bool = True, device: Optional[Union[str,torch.device]]=None) -> dict:
         raise NotImplementedError
 
     @abstractmethod
@@ -22,6 +22,30 @@ class BaseDataProcessor(ABC):
     @abstractmethod
     def split_input_batch(self, batch: dict) -> List[dict]:
         raise NotImplementedError
+    
+    def apply_chat_template(self, messages: Union[dict,List[str],str], tokenize: bool = False, add_generation_prompt: bool = True) -> List[str]:
+        return self.processor.apply_chat_template(messages, tokenize, add_generation_prompt)
+    
+    def get_images_from_messages(self, messages: Union[dict,List[str],str]) -> List[dict]:
+        if isinstance(messages,list) and isinstance(messages[0],str):
+            messages = [json.loads(m) for m in messages]
+        elif isinstance(messages, str):
+            messages = [json.loads(messages)]
+        elif isinstance(messages, dict):
+            messages = [messages]
+        return self._get_images_from_messages(messages)
+    
+    @abstractmethod
+    def _get_images_from_messages(self, messages: List[dict]) -> List[dict]:
+        raise NotImplementedError
+    
+    @property
+    def pad_token_id(self) -> int:
+        return self.processor.tokenizer.pad_token_id
+    
+    @property
+    def eos_token_id(self) -> int:
+        return self.processor.tokenizer.eos_token_id
 
 
 class Qwen2VLDataProcessor(BaseDataProcessor):
@@ -126,7 +150,10 @@ class Qwen2VLDataProcessor(BaseDataProcessor):
             assert len(thws) == 0
             assert len(pixel_values) == 0
         return batch_kwargs
-                
+    
+    def _get_images_from_messages(self, messages: List[dict]) -> List[dict]:
+        image_inputs, _ = process_vision_info(messages)
+        return image_inputs
 
 DATA_PROCESSOR_MAP = {
     Qwen2VLProcessor: Qwen2VLDataProcessor,
