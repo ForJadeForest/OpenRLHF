@@ -380,8 +380,8 @@ class ActorModelRayActor(BasePPORole):
             max_length=args.max_len,
             temperature=args.temperature,
             top_p=args.top_p,
-            pad_token_id=self.processor.pad_token_id,
-            eos_token_id=self.processor.eos_token_id,
+            pad_token_id=self.processor.tokenizer.pad_token_id,
+            eos_token_id=self.processor.tokenizer.eos_token_id,
         )
 
         # broadcast checkpoint

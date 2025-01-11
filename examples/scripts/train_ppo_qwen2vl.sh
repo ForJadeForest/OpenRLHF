@@ -12,8 +12,9 @@ deepspeed --include localhost:4,5,6,7 --module openrlhf.cli.train_ppo \
    --max_epochs 1 \
    --target_modules q_proj \
    --generate_max_len 10 \
-   --zero_stage 0 \
+   --zero_stage 2 \
    --bf16 \
+   --load_in_4bit \
    --lora_rank 128 \
    --actor_learning_rate 5e-7 \
    --critic_learning_rate 9e-6 \

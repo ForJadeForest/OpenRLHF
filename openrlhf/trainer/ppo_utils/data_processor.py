@@ -23,16 +23,22 @@ class BaseDataProcessor(ABC):
     def split_input_batch(self, batch: dict) -> List[dict]:
         raise NotImplementedError
     
+    def _format_messages(self, messages: Union[dict,List[str],str]) -> List[str]:
+        if isinstance(messages,list) and isinstance(messages[0],str):
+            return [json.loads(m) for m in messages]
+        elif isinstance(messages, str):
+            return [json.loads(messages)]
+        elif isinstance(messages, dict):
+            return [messages]
+
+
     def apply_chat_template(self, messages: Union[dict,List[str],str], tokenize: bool = False, add_generation_prompt: bool = True) -> List[str]:
+        messages = self._format_messages(messages)
+        print(messages)
         return self.processor.apply_chat_template(messages, tokenize, add_generation_prompt)
     
     def get_images_from_messages(self, messages: Union[dict,List[str],str]) -> List[dict]:
-        if isinstance(messages,list) and isinstance(messages[0],str):
-            messages = [json.loads(m) for m in messages]
-        elif isinstance(messages, str):
-            messages = [json.loads(messages)]
-        elif isinstance(messages, dict):
-            messages = [messages]
+        messages = self._format_messages(messages)
         return self._get_images_from_messages(messages)
     
     @abstractmethod
