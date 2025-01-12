@@ -661,11 +661,8 @@ class RemoteExperienceMaker(NaiveExperienceMaker):
             messages = all_prompts[i * batch_size : (i + 1) * batch_size]
             if messages:
                 prompts = self.data_processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-                images = self.data_processor.get_images_from_messages(messages)
-                vllm_inputs = {
-                    "prompt": prompts,
-                    "multi_modal_data": {"image": images},
-                }
+                images = [self.data_processor.get_images_from_messages(m) for m in messages]
+                vllm_inputs = [{"prompt":p,"multi_modal_data":{"image":imgs}} for p,imgs in zip(prompts,images)]
                 all_output_refs.append(
                     llm.generate.remote(vllm_inputs,sampling_params=sampling_params)
                 )

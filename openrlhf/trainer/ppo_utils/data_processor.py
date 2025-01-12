@@ -34,8 +34,7 @@ class BaseDataProcessor(ABC):
 
     def apply_chat_template(self, messages: Union[dict,List[str],str], tokenize: bool = False, add_generation_prompt: bool = True) -> List[str]:
         messages = self._format_messages(messages)
-        print(messages)
-        return self.processor.apply_chat_template(messages, tokenize, add_generation_prompt)
+        return self.processor.apply_chat_template(messages, tokenize=tokenize, add_generation_prompt=add_generation_prompt)
     
     def get_images_from_messages(self, messages: Union[dict,List[str],str]) -> List[dict]:
         messages = self._format_messages(messages)
