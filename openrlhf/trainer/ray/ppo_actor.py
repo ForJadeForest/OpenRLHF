@@ -8,7 +8,7 @@ import deepspeed
 import ray
 import torch
 from transformers.trainer import get_scheduler
-
+from peft.peft_model import PeftModel
 from openrlhf.datasets import PromptDataset, SFTDataset
 from openrlhf.models import Actor
 from openrlhf.trainer import PPOTrainer
@@ -16,7 +16,7 @@ from openrlhf.trainer.ppo_utils import Experience, RemoteExperienceMaker
 from openrlhf.utils import blending_datasets, get_vl_processor
 from openrlhf.utils.deepspeed import DeepspeedStrategy
 from openrlhf.utils.distributed_util import init_process_group
-
+from copy import deepcopy
 from .launcher import BasePPORole
 
 
@@ -137,7 +137,10 @@ class ActorPPOTrainer(PPOTrainer):
     def _broadcast_to_vllm(self):
         # avoid OOM
         torch.cuda.empty_cache()
-        model = self.actor.model.module
+        if isinstance(self.actor.model.module, PeftModel):
+            model = deepcopy(self.actor.model.module).merge_and_unload()
+        else:
+            model = self.actor.model.module
         count, num_params = 0, len(list(model.named_parameters()))
         for name, param in model.named_parameters():
             count += 1  # empty_cache at last param
