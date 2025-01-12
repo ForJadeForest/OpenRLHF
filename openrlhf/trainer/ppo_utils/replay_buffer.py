@@ -246,4 +246,4 @@ class NaiveReplayBuffer(ABC):
         rstd = (all_std / all_count).clamp(min=1e-8).rsqrt()
 
         for i, item in enumerate(self):
-            setattr(item, attribute, (items[i] - mean) * rstd)
+            setattr(item, attribute, (items[i] - mean) * rstd + 1e-8)
