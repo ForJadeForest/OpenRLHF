@@ -8,7 +8,7 @@ from transformers.trainer import get_scheduler
 from openrlhf.datasets import ProcessRewardDataset
 from openrlhf.models import Actor
 from openrlhf.trainer import ProcessRewardModelTrainer
-from openrlhf.utils import blending_datasets, get_strategy, get_tokenizer
+from openrlhf.utils import blending_datasets, get_strategy, get_vl_processor
 
 
 def train(args):
@@ -31,7 +31,8 @@ def train(args):
         packing_samples=args.packing_samples,
     )
     # configure tokenizer
-    tokenizer = get_tokenizer(args.pretrain, model.model, "right", strategy, use_fast=not args.disable_fast_tokenizer)
+    processor = get_vl_processor(args.pretrain, model.model, "right", strategy, use_fast=not args.disable_fast_tokenizer)
+    processor.tokenizer.add_special_tokens({'additional_special_tokens': [strategy.args.placeholder_token]})
     strategy.print(model)
 
     # gradient_checkpointing
@@ -55,8 +56,8 @@ def train(args):
     )
     train_data = train_data.select(range(min(args.max_samples, len(train_data))))
     eval_data = eval_data.select(range(min(args.max_samples, len(eval_data))))
-    train_dataset = ProcessRewardDataset(train_data, tokenizer, args.max_len, strategy)
-    eval_dataset = ProcessRewardDataset(eval_data, tokenizer, args.max_len, strategy)
+    train_dataset = ProcessRewardDataset(train_data, processor, args.max_len, strategy)
+    eval_dataset = ProcessRewardDataset(eval_data, processor, args.max_len, strategy)
 
     # prepare dataloader
     train_dataloader = strategy.setup_dataloader(
@@ -109,13 +110,13 @@ def train(args):
         max_norm=args.max_norm,
         batch_size=args.train_batch_size,
         max_epochs=args.max_epochs,
-        tokenizer=tokenizer,
+        processor=processor,
     )
 
     trainer.fit(args, consumed_samples, num_update_steps_per_epoch)
 
     # save model checkpoint after fitting on only rank0
-    strategy.save_model(model, tokenizer, args.save_path)
+    strategy.save_model(model, processor, args.save_path)
 
 
 if __name__ == "__main__":
@@ -178,7 +179,7 @@ if __name__ == "__main__":
     parser.add_argument("--input_key", type=str, default="input", help="JSON dataset key")
     parser.add_argument("--label_key", type=str, default="label", help="JSON dataset key")
     parser.add_argument("--max_samples", type=int, default=1e8, help="Max number of samples")
-    parser.add_argument("--max_len", type=int, default=2048, help="Max tokens for the samples")
+    parser.add_argument("--max_len", type=int, default=None, help="Max tokens for the samples")
 
     # wandb parameters
     parser.add_argument("--use_wandb", type=str, default=None)

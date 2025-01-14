@@ -1,0 +1,23 @@
+deepspeed --include localhost:4,5,6,7 --module openrlhf.cli.train_prm \
+   --save_path ./ckpts/qwen2vl-2b-prm \
+   --save_steps 500 \
+   --logging_steps 1 \
+   --eval_steps 100 \
+   --train_batch_size 256 \
+   --micro_train_batch_size 8 \
+   --pretrain ckpts/Qwen2-VL-2B-Instruct  \
+   --bf16 \
+   --lora_rank 64 \
+   --target_modules q_proj \
+   --max_epochs 1 \
+   --zero_stage 2 \
+   --learning_rate 1e-6 \
+   --dataset data/prm.json \
+   --input_key message \
+   --label_key label \
+   --flash_attn \
+   --load_checkpoint \
+   --gradient_checkpointing \
+   --wandb_group prm \
+   --placeholder_token ки \
+   --reward_tokens + -
