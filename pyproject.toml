@@ -33,6 +33,11 @@ dependencies = [
     "wheel>=0.45.1",
 ]
 
+[tool.hatch.build.targets.sdist]
+include = [
+  "openrlhf/",
+]
+
 [project.optional-dependencies]
 vllm = [
     "vllm==0.6.5",
