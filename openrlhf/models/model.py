@@ -77,9 +77,9 @@ def get_llm_for_sequence_regression(
     base_class = get_conditional_generation_cls(config)
     base_pretrained_class = base_class.__base__
     if model_type == "reward":
-        cls_class = _get_reward_model(base_pretrained_class, base_class, value_head_prefix, packing_samples)
+        cls_class = _get_reward_model(base_class, value_head_prefix, packing_samples)
     else:
-        cls_class = _get_critic_model(base_pretrained_class, base_class, value_head_prefix, packing_samples)
+        cls_class = _get_critic_model(base_class, value_head_prefix, packing_samples)
 
     # Note: dschf is defined in function scope to avoid global effects
     # https://huggingface.co/docs/transformers/main_classes/deepspeed#nontrainer-deepspeed-integration
@@ -98,31 +98,17 @@ def get_llm_for_sequence_regression(
         )
     else:
         nf4_config = None
-    arch = config.architectures[0]
-    if arch in ["RewardModel", "CriticModel"]:
-        # we are loading from pretrained RewardModel or CriticModel
-        model = cls_class.from_pretrained(
-            model_name_or_path,
-            config=config,
-            trust_remote_code=True,
-            torch_dtype=torch.bfloat16 if bf16 else "auto",
-            quantization_config=nf4_config,
-            device_map=device_map,
-            **kwargs,
-        )
-    else:
-        # we are initializing from pretrained Model
-        model = cls_class._from_config(config,torch_dtype=torch.bfloat16 if bf16 else "auto")
-        base_model = base_class.from_pretrained(
-            model_name_or_path,
-            config=config,
-            trust_remote_code=True,
-            torch_dtype=torch.bfloat16 if bf16 else "auto",
-            quantization_config=nf4_config,
-            device_map=device_map,
-            **kwargs,
-        )
-        setattr(model, model.base_model_prefix, base_model)
+
+    model = cls_class.from_pretrained(
+        model_name_or_path,
+        config=config,
+        trust_remote_code=True,
+        torch_dtype=torch.bfloat16 if bf16 else "auto",
+        quantization_config=nf4_config,
+        device_map=device_map,
+        **kwargs,
+    )
+
         
    
     # LoRA
@@ -172,13 +158,12 @@ def get_llm_for_sequence_regression(
     return model
 
 
-def _get_reward_model(base_pretrained_model, base_llm_model, value_head_prefix="score", packing_samples=False):
-    class RewardModel(base_pretrained_model):
+def _get_reward_model(base_llm_model, value_head_prefix="score", packing_samples=False):
+    class RewardModel(base_llm_model):
         supports_gradient_checkpointing = True
 
         def __init__(self, config: AutoConfig):
             super().__init__(config)
-            setattr(self, self.base_model_prefix, base_llm_model(config))
 
             self.value_head_prefix = value_head_prefix
             setattr(self, value_head_prefix, nn.Linear(config.hidden_size, 1, bias=False))
@@ -221,7 +206,7 @@ def _get_reward_model(base_pretrained_model, base_llm_model, value_head_prefix="
                 # explicitly ignore attention_mask for packing_samples
                 attention_mask = None
 
-            outputs = getattr(self, self.base_model_prefix)(
+            outputs = super().forward(
                 input_ids=input_ids, attention_mask=attention_mask, position_ids=position_ids,output_hidden_states=True, **visual_inputs
             )
             if "last_hidden_state" in outputs:
@@ -253,13 +238,12 @@ def _get_reward_model(base_pretrained_model, base_llm_model, value_head_prefix="
     return RewardModel
 
 
-def _get_critic_model(base_pretrained_model, base_llm_model, value_head_prefix="score", packing_samples=False):
-    class CriticModel(base_pretrained_model):
+def _get_critic_model(base_llm_model, value_head_prefix="score", packing_samples=False):
+    class CriticModel(base_llm_model):
         supports_gradient_checkpointing = True
 
         def __init__(self, config: AutoConfig):
             super().__init__(config)
-            setattr(self, self.base_model_prefix, base_llm_model(config))
 
             self.value_head_prefix = value_head_prefix
             setattr(self, value_head_prefix, nn.Linear(config.hidden_size, 1, bias=False))
@@ -295,7 +279,7 @@ def _get_critic_model(base_pretrained_model, base_llm_model, value_head_prefix="
                 # explicitly ignore attention_mask for packing_samples
                 attention_mask = None
 
-            outputs = getattr(self, self.base_model_prefix)(
+            outputs = super().forward(
                 input_ids=input_ids, attention_mask=attention_mask, position_ids=position_ids,output_hidden_states=True, **visual_inputs
             )
             if "last_hidden_state" in outputs:
