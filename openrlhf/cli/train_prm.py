@@ -33,6 +33,7 @@ def train(args):
     # configure tokenizer
     processor = get_vl_processor(args.pretrain, model.model, "right", strategy, use_fast=not args.disable_fast_tokenizer)
     processor.tokenizer.add_special_tokens({'additional_special_tokens': [strategy.args.placeholder_token]})
+    model.model.resize_token_embeddings(len(processor.tokenizer))
     strategy.print(model)
 
     # gradient_checkpointing
