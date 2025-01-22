@@ -112,7 +112,7 @@ class RewardModelRayActor(BasePPORole):
         self._setup_distributed(strategy)
         model = get_llm_for_sequence_regression(
             pretrain,
-            "reward",
+            "reward" if not strategy.args.use_prm else "process_reward",
             normalize_reward=strategy.args.normalize_reward,
             use_flash_attention_2=strategy.args.flash_attn,
             bf16=strategy.args.bf16,
@@ -120,6 +120,8 @@ class RewardModelRayActor(BasePPORole):
             ds_config=strategy.get_ds_eval_config(offload=strategy.args.ref_reward_offload),
             value_head_prefix=strategy.args.value_head_prefix,
             packing_samples=strategy.args.packing_samples,
+            placeholder_token=strategy.args.placeholder_token,
+            reward_tokens=strategy.args.reward_tokens,
         )
         strategy.print(model)
         strategy.print("reward normalization status: {}".format(strategy.args.normalize_reward))

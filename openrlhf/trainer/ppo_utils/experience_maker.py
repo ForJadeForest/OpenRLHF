@@ -339,6 +339,7 @@ class NaiveExperienceMaker(ABC):
         args = self.strategy.args
         # reward shaping for RLOO
         if args.advantage_estimator == "rloo":
+            raise NotImplementedError("RLOO is not supported for dense rewards currently.")
             rewards = torch.cat([experience.info["reward"] for experience in experiences])
             rewards = rewards.reshape(-1, args.n_samples_per_prompt).to(device="cuda")
             baseline = (rewards.sum(-1, keepdim=True) - rewards) / (args.n_samples_per_prompt - 1)

@@ -139,6 +139,8 @@ def convert_token_to_id(token, tokenizer):
         token = tokenizer.encode(token, add_special_tokens=False)
         assert len(token) == 1
         return token[0]
+    elif isinstance(token, int):
+        return token
     else:
         raise ValueError("token should be int or str")
 
