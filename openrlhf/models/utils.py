@@ -63,6 +63,8 @@ def compute_reward(
         eos_indices = action_mask.size(1) - 1 - action_mask.long().fliplr().argmax(dim=1, keepdim=True)
         last_reward = torch.zeros_like(kl).scatter_(dim=1, index=eos_indices, src=r.unsqueeze(1).to(kl.dtype))
         '''
+        #r: [batch_size, seq_len]
+        r = r[:, -num_actions:]
         last_reward = r * action_mask
 
         reward = last_reward + kl_reward

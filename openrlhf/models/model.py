@@ -66,8 +66,8 @@ def get_llm_for_sequence_regression(
         nn.Module: A pretrained transformer model with a sequence regression head.
     """
     assert (
-        model_type == "critic" or model_type == "reward"
-    ), f"invalid model_type: {model_type}, should be critic or reward."
+        model_type == "critic" or model_type == "reward" or model_type == "process_reward"
+    ), f"invalid model_type: {model_type}, should be critic or reward or process_reward"
 
     config = AutoConfig.from_pretrained(model_name_or_path, trust_remote_code=True)
     config.normalize_reward = normalize_reward
@@ -234,10 +234,10 @@ def _get_reward_model(base_llm_model, value_head_prefix="score", packing_samples
                 reward = reward.squeeze(0).gather(dim=0, index=eos_indices)
             else:
                 eos_indices = attention_mask.size(1) - 1 - attention_mask.long().fliplr().argmax(dim=1, keepdim=True)
-                values_scatter = values.gather(dim=1, index=eos_indices).squeeze(1) # [batch_size]
-                reward = torch.zeros_like(values,dtype=values.dtype,device=values.device)
-                #reward at eos equals value at eos
-                reward.scatter_(dim=1, index=eos_indices, src=values_scatter) # [batch_size, seq_len]
+                # only keep value at eos token, set other values to 0. keep the shape of values as [batch_size,seq_len]
+                reward = values * (torch.arange(values.size(1), device=values.device) == eos_indices).float()
+
+
 
             if not self.training and self.normalize_reward:
                 reward = (reward - self.mean) / self.std
