@@ -165,8 +165,8 @@ if __name__ == "__main__":
     parser.add_argument("--lr_scheduler", type=str, default="cosine_with_min_lr")
     parser.add_argument("--l2", type=float, default=0.0, help="weight decay loss")
     parser.add_argument("--adam_betas", type=float, nargs=2, default=(0.9, 0.95), help="Betas for Adam optimizer")
-    parser.add_argument("--placeholder_token", type=str, default=None)
-    parser.add_argument("--reward_tokens", type=str, nargs="*", default=None)
+    parser.add_argument("--placeholder_token", type=int, default=None)
+    parser.add_argument("--reward_tokens", type=int, nargs="*", default=None)
 
     # packing samples using Flash Attention2
     parser.add_argument("--packing_samples", action="store_true", default=False)
