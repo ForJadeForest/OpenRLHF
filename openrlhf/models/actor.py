@@ -1,15 +1,16 @@
 from typing import Optional, Tuple, Union
-
+import importlib
 import torch
 import torch.distributed as dist
 import torch.nn as nn
 from peft import LoraConfig, TaskType, get_peft_model
 from peft.tuners.lora import LoraLayer
-from transformers import AutoModelForCausalLM, BitsAndBytesConfig
+from transformers import AutoConfig, BitsAndBytesConfig
 from transformers.integrations.deepspeed import HfDeepSpeedConfig
 
 from .ring_attn_utils import convert_ring_attn_params
 from .utils import log_probs_from_logits, reset_position_ids
+from ..utils.utils import get_conditional_generation_cls
 
 
 class Actor(nn.Module):
@@ -69,8 +70,10 @@ class Actor(nn.Module):
                 )
             else:
                 nf4_config = None
-
-            self.model = AutoModelForCausalLM.from_pretrained(
+            #There is no AutoModelForConditionalGeneration in transformers. We manually implement it.
+            config = AutoConfig.from_pretrained(pretrain_or_model)
+            model_cls = get_conditional_generation_cls(config)
+            self.model = model_cls.from_pretrained(
                 pretrain_or_model,
                 trust_remote_code=True,
                 attn_implementation=attn_implementation,
@@ -119,12 +122,11 @@ class Actor(nn.Module):
             self.model = pretrain_or_model
 
     @torch.no_grad()
-    def generate(self, input_ids: torch.Tensor, **kwargs) -> Union[
+    def generate(self, inputs, **kwargs) -> Union[
         Tuple[torch.LongTensor, torch.LongTensor],
         Tuple[torch.LongTensor, torch.LongTensor, torch.BoolTensor],
     ]:
         generate_args = {
-            "input_ids": input_ids,
             "top_k": kwargs.get("top_k", None),
             "top_p": kwargs.get("top_p", None),
             "do_sample": kwargs.get("do_sample", True),
@@ -132,7 +134,6 @@ class Actor(nn.Module):
             "temperature": kwargs.get("temperature", 1),
             "use_cache": True,
             "num_beams": kwargs.get("num_beams", 1),
-            "attention_mask": kwargs.get("attention_mask"),
             "eos_token_id": kwargs.get("eos_token_id"),
             "pad_token_id": kwargs.get("pad_token_id"),
             "min_new_tokens": kwargs.get("min_new_tokens", 1),
@@ -144,13 +145,18 @@ class Actor(nn.Module):
             generate_args["max_length"] = kwargs.get("max_length")
 
         # Call generate
-        sequences = self.model.generate(**generate_args)
+        sequences = self.model.generate(**inputs,**generate_args)
 
         # Prepare mask tensor
         eos_token_id = generate_args["eos_token_id"]
         pad_token_id = generate_args["pad_token_id"]
 
-        return self.process_sequences(sequences, input_ids.size(1), eos_token_id, pad_token_id)
+        if "input_ids" in inputs:
+            input_len = inputs["input_ids"].size(1)
+        elif "inputs_embeds" in generate_args:
+            input_len = inputs["inputs_embeds"].size(1)
+
+        return self.process_sequences(sequences, input_len, eos_token_id, pad_token_id)
 
     def process_sequences(self, sequences: torch.Tensor, input_len, eos_token_id, pad_token_id):
         attention_mask = (sequences.ne(eos_token_id) & sequences.ne(pad_token_id)).to(dtype=torch.long)
@@ -188,6 +194,7 @@ class Actor(nn.Module):
         return_output=False,
         ring_attn_group: Optional[dist.ProcessGroup] = None,
         packed_seq_lens: Optional[list[int]] = None,
+        visual_inputs: Optional[dict] = {},
     ) -> torch.Tensor:
         """Returns action log probs"""
         if not self.packing_samples:
@@ -196,6 +203,7 @@ class Actor(nn.Module):
             position_ids.masked_fill_(attention_mask == 0, 1)
         else:
             # convert attention_mask to position_ids
+            raise NotImplementedError("Packing samples is not supported in this version.")
             if ring_attn_group is not None:
                 sequences, attention_mask, position_ids = convert_ring_attn_params(
                     sequences, attention_mask, packed_seq_lens, ring_attn_group
@@ -205,14 +213,14 @@ class Actor(nn.Module):
             # explicitly ignore attention_mask for packing_samples
             attention_mask = None
 
-        output = self.model(sequences, attention_mask=attention_mask, position_ids=position_ids)
+        output = self.model(sequences, attention_mask=attention_mask, position_ids=position_ids, **visual_inputs)
         # https://github.com/OpenRLHF/OpenRLHF/pull/634
         output["logits"] = output["logits"].to(torch.float32)
 
         if num_actions is None:
             assert return_output
             return output
-
+        #FIXME: image token could not be indexed
         log_probs = log_probs_from_logits(output["logits"][:, :-1, :], sequences[:, 1:])
 
         if not self.packing_samples:

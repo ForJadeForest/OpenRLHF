@@ -11,7 +11,7 @@ from transformers.trainer import get_scheduler
 from openrlhf.models import get_llm_for_sequence_regression
 from openrlhf.trainer import PPOTrainer
 from openrlhf.trainer.ppo_utils import Experience
-from openrlhf.utils import get_tokenizer
+from openrlhf.utils import get_vl_processor
 from openrlhf.utils.deepspeed import DeepspeedStrategy
 
 from .launcher import BasePPORole
@@ -89,7 +89,7 @@ class CriticModelRayActor(BasePPORole):
 
         # configure tokenizer
         if strategy.args.save_value_network:
-            self.tokenizer = get_tokenizer(
+            self.processor = get_vl_processor(
                 pretrain, critic, "left", strategy, use_fast=not strategy.args.disable_fast_tokenizer
             )
 
@@ -153,13 +153,14 @@ class CriticModelRayActor(BasePPORole):
         num_actions: Optional[Union[int, list[int]]] = None,
         attention_mask: Optional[torch.Tensor] = None,
         packed_seq_lens=None,
+        visual_inputs={},
     ) -> torch.Tensor:
         """Generates critic values."""
         device = torch.cuda.current_device()
         self.critic.eval()
         with torch.no_grad():
             value = self.critic(
-                sequences.to(device), num_actions, attention_mask.to(device), packed_seq_lens=packed_seq_lens
+                sequences.to(device), num_actions, attention_mask.to(device), packed_seq_lens=packed_seq_lens, visual_inputs=visual_inputs
             )
         self.critic.train()  # reset model state
         return value.to("cpu")

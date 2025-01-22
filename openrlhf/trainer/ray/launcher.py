@@ -87,15 +87,18 @@ class ReferenceModelRayActor(BasePPORole):
         attention_mask: Optional[torch.Tensor] = None,
         return_output=False,
         packed_seq_lens: Optional[list[int]] = None,
+        visual_inputs: Optional[dict] = {}
     ) -> torch.Tensor:
         device = torch.cuda.current_device()
         with torch.no_grad():
+            visual_inputs = {k:v.to(device) for k,v in visual_inputs.items()}
             log_probs = self.model(
                 sequences.to(device),
                 num_actions,
                 attention_mask.to(device),
                 return_output=return_output,
                 packed_seq_lens=packed_seq_lens,
+                visual_inputs=visual_inputs
             )
         return log_probs.to("cpu")
 
@@ -109,7 +112,7 @@ class RewardModelRayActor(BasePPORole):
         self._setup_distributed(strategy)
         model = get_llm_for_sequence_regression(
             pretrain,
-            "reward",
+            "reward" if not strategy.args.use_prm else "process_reward",
             normalize_reward=strategy.args.normalize_reward,
             use_flash_attention_2=strategy.args.flash_attn,
             bf16=strategy.args.bf16,
@@ -117,6 +120,8 @@ class RewardModelRayActor(BasePPORole):
             ds_config=strategy.get_ds_eval_config(offload=strategy.args.ref_reward_offload),
             value_head_prefix=strategy.args.value_head_prefix,
             packing_samples=strategy.args.packing_samples,
+            placeholder_token=strategy.args.placeholder_token,
+            reward_tokens=strategy.args.reward_tokens,
         )
         strategy.print(model)
         strategy.print("reward normalization status: {}".format(strategy.args.normalize_reward))
@@ -129,11 +134,12 @@ class RewardModelRayActor(BasePPORole):
         self.model.eval()
 
     def forward(
-        self, sequences: torch.LongTensor, attention_mask: Optional[torch.Tensor] = None, packed_seq_lens=None
+        self, sequences: torch.LongTensor, attention_mask: Optional[torch.Tensor] = None, packed_seq_lens=None, visual_inputs={}
     ) -> torch.Tensor:
         device = torch.cuda.current_device()
+        visual_inputs = {k:v.to(device) for k,v in visual_inputs.items()}
         with torch.no_grad():
-            reward = self.model(sequences.to(device), attention_mask.to(device), packed_seq_lens=packed_seq_lens)
+            reward = self.model(sequences.to(device), attention_mask.to(device), packed_seq_lens=packed_seq_lens, visual_inputs=visual_inputs)
         return reward.to("cpu")
 
     def empty_cache(self) -> None:
