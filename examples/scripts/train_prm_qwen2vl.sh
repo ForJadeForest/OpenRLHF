@@ -19,5 +19,5 @@ deepspeed --include localhost:4,5,6,7 --module openrlhf.cli.train_prm \
    --load_checkpoint \
    --gradient_checkpointing \
    --wandb_group prm \
-   --placeholder_token ки \
-   --reward_tokens + -
+   --placeholder_token 151652 \
+   --reward_tokens 10 12

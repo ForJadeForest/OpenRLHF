@@ -67,10 +67,11 @@ class ProcessRewardDataset(Dataset):
         if isinstance(label_values[0], str):
             label_tokens = []
             for label in label_values:
+                label = convert_token_to_id(label, self.tokenizer)
                 assert (
                     self.reward_tokens is None or label in self.reward_tokens
                 ), f"label should be in reward tokens {self.reward_tokens}, got {label}"
-                label_tokens.append(convert_token_to_id(label, self.tokenizer))
+                label_tokens.append(label)
 
             # label_tokens is list of token id (for '+', '-', etc)
             label_tensor = torch.tensor(label_tokens, dtype=input_ids.dtype)
