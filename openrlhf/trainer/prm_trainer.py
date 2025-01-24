@@ -8,6 +8,7 @@ from openrlhf.models import PRMLoss
 from openrlhf.utils.distributed_sampler import DistributedSampler
 from openrlhf.utils.utils import convert_token_to_id
 
+import evaluate
 
 class ProcessRewardModelTrainer(ABC):
     """
@@ -59,6 +60,9 @@ class ProcessRewardModelTrainer(ABC):
             self.reward_token_ids = [convert_token_to_id(token, self.tokenizer) for token in self.reward_token_ids]
 
         self.ignore_index = -100
+
+        self.evaluator = evaluate.combine(["f1", "precision", "recall"])
+
         self.loss_fn = PRMLoss(self.placeholder_token_id, self.reward_token_ids)
 
         # Mixtral 8*7b
@@ -108,6 +112,7 @@ class ProcessRewardModelTrainer(ABC):
         )
         loss_sum = 0
         acc_sum = 0
+        logs_dict = {}
         for epoch in range(start_epoch, self.epochs):
             if isinstance(self.train_dataloader.sampler, DistributedSampler):
                 self.train_dataloader.sampler.set_epoch(
@@ -152,34 +157,38 @@ class ProcessRewardModelTrainer(ABC):
                 else:
                     aux_loss = 0
 
-                prm_loss, acc = self.loss_fn(inputs, output.logits, labels, return_acc=True)
+                prm_loss, acc, pred, labels = self.loss_fn(inputs, output.logits, labels, return_acc=True)
                 loss = prm_loss + aux_loss * self.args.aux_loss_coef
                 self.strategy.backward(loss, self.model, self.optimizer)
                 self.strategy.optimizer_step(self.optimizer, self.model, self.scheduler)
 
                 loss_sum += loss.item()
                 acc_sum += acc.item()
-                logs_dict = {
+                self.evaluator.add_batch(pred, labels)
+                logs_dict.update({
                     "prm_loss": prm_loss.item(),
                     "acc": acc.item(),
                     "lr": self.scheduler.get_last_lr()[0],
-                }
+                })
                 if self.aux_loss:
                     logs_dict["aux_loss"] = aux_loss.item()
-                # step bar
+                
                 logs_dict = self.strategy.all_reduce(logs_dict)
-                step_bar.set_postfix(logs_dict)
-                step_bar.update()
 
                 # logs/checkpoints/evaluation
                 if step % self.strategy.accumulated_gradient == 0:
                     logs_dict["loss_mean"] = loss_sum / self.strategy.accumulated_gradient
                     logs_dict["acc_mean"] = acc_sum / self.strategy.accumulated_gradient
+                    logs_dict.update(self.evaluator.compute(average="macro"))
                     loss_sum = 0
                     acc_sum = 0
                     global_step = step // self.strategy.accumulated_gradient
                     client_states = {"consumed_samples": global_step * args.train_batch_size}
                     self.save_logs_and_checkpoints(args, global_step, step_bar, logs_dict, client_states)
+
+                # step bar
+                step_bar.set_postfix(logs_dict)
+                step_bar.update()
 
                 step += 1
 
@@ -240,8 +249,8 @@ class ProcessRewardModelTrainer(ABC):
                     visual_inputs=visual_inputs,
                 )
 
-                loss, acc = self.loss_fn(inputs, output.logits, labels, return_acc=True)
-
+                loss, acc, pred, labels = self.loss_fn(inputs, output.logits, labels, return_acc=True)
+                self.evaluator.add_batch(pred, labels)
                 times += 1
                 loss_sum += loss.item()
                 acc_sum += acc.item()
@@ -249,7 +258,8 @@ class ProcessRewardModelTrainer(ABC):
                 step_bar.update()
                 logs = self.strategy.all_reduce(bar_dict)
                 step_bar.set_postfix(logs)
-
+            logs.update(self.evaluator.compute(average="macro"))
+            step_bar.set_postfix(logs)
             if self._wandb is not None and self.strategy.is_rank_0():
                 logs = {"eval/%s" % k: v for k, v in {**logs, "global_step": steps}.items()}
                 self._wandb.log(logs)

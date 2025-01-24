@@ -322,5 +322,6 @@ class PRMLoss(nn.Module):
 
         if labels.dtype == logits.dtype:
             labels = labels.argmax(dim=-1)
-        acc = (logits.argmax(dim=-1) == labels).float().mean()
-        return loss, acc
+        pred = logits.argmax(dim=-1)
+        acc = (pred == labels).float().mean()
+        return loss, acc, pred, labels

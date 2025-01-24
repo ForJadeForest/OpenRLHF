@@ -339,6 +339,8 @@ wheels = [
     { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/8b/0f/17b5b6242f986147675f8fdbfd5f2f8e7e7ebf8a9289cd548ab0e3ee5095/blake3-1.0.1-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:795bca3208fa11d2eeb26c2cb38e9a94f06cbec9f97fe6752b82b12645e5ff22", size = 365903 },
     { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/73/cf/c42a4e623a3a0c5baac87dd7b46cbf7284fb012fcc87179987a17c460c9c/blake3-1.0.1-cp313-cp313-musllinux_1_1_aarch64.whl", hash = "sha256:46486763ffe98f0296055f5e6a413bbd5822fd298c461127b28f5b87bb3cdfa5", size = 528350 },
     { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/9d/d3/6103551410a6315e9bb47d731afe789f5ffdbf8af0d2197de0438fffe099/blake3-1.0.1-cp313-cp313-musllinux_1_1_x86_64.whl", hash = "sha256:06ef09f7a9e3b2971e123a0bb408edaaf4c33ae5917f0c11fe05520b5d85f847", size = 536367 },
+    { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/80/57/2578a4d0b441724013a976a15b560641b2ef3d9edc9d80e8388a02ab884a/blake3-1.0.1-cp313-cp313-win32.whl", hash = "sha256:14e29d2a0025eb8597550187dc9a4f2e86a92b9bfc2ac8f102f7e62bf55002ce", size = 224522 },
+    { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/3a/87/96fa2e37d2fbb19e89347ad298bf29abd993d8d6fa9608b34fcdd741b2e5/blake3-1.0.1-cp313-cp313-win_amd64.whl", hash = "sha256:e57af037cc5ef7fbd20fd0fa9b59b2975899d8150fe4f81035c0efb06d4cc7cf", size = 207984 },
     { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/c1/4b/04a8114dc16b85e38274bbce24af5139d4935fc80a648cd204d67b0eb19b/blake3-1.0.1-cp313-cp313t-macosx_10_12_x86_64.whl", hash = "sha256:a13bb0ec647f280491d6ad9b105e5f529166d600a3f71f09412171870844792d", size = 326697 },
     { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/a2/2b/0e8ff78bbb21055def192322f5da293c28ad6f79ab0984b21098c61397ae/blake3-1.0.1-cp313-cp313t-macosx_11_0_arm64.whl", hash = "sha256:6c981943bdc8bf5eff1833fbaeafb4360b889af31deccf8f52813608d98fff78", size = 307093 },
     { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/12/1a/351681b9d5bc034b50b37f07a844dfb48312c577594e5191916faafaaeed/blake3-1.0.1-cp313-cp313t-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:2e7656948aba53b0e68380dc3cca6b2f93965973469ef99077f5855a0e62b9dc", size = 351487 },
@@ -717,6 +719,28 @@ source = { registry = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple" }
 sdist = { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/79/ca/9f5dcb8bead39959454c3912266bedc4c315839cee0e0ca9f4328f4588c1/einops-0.8.0.tar.gz", hash = "sha256:63486517fed345712a8385c100cb279108d9d47e6ae59099b07657e983deae85", size = 58861 }
 wheels = [
     { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/44/5a/f0b9ad6c0a9017e62d4735daaeb11ba3b6c009d69a26141b258cd37b5588/einops-0.8.0-py3-none-any.whl", hash = "sha256:9572fb63046264a862693b0a87088af3bdc8c068fde03de63453cbbde245465f", size = 43223 },
+]
+
+[[package]]
+name = "evaluate"
+version = "0.4.3"
+source = { registry = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple" }
+dependencies = [
+    { name = "datasets" },
+    { name = "dill" },
+    { name = "fsspec", extra = ["http"] },
+    { name = "huggingface-hub" },
+    { name = "multiprocess" },
+    { name = "numpy" },
+    { name = "packaging" },
+    { name = "pandas" },
+    { name = "requests" },
+    { name = "tqdm" },
+    { name = "xxhash" },
+]
+sdist = { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/5a/a0/10a56e0939ece94c54276e81459cb4101f46f0e9a6f54fc31a35f64e8854/evaluate-0.4.3.tar.gz", hash = "sha256:3a5700cf83aabee9549264e1e5666f116367c61dbd4d38352015e859a5e2098d", size = 65679 }
+wheels = [
+    { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/a2/e7/cbca9e2d2590eb9b5aa8f7ebabe1beb1498f9462d2ecede5c9fd9735faaf/evaluate-0.4.3-py3-none-any.whl", hash = "sha256:47d8770bdea76e2c2ed0d40189273027d1a41ccea861bcc7ba12d30ec5d1e517", size = 84010 },
 ]
 
 [[package]]
@@ -2018,7 +2042,7 @@ wheels = [
 
 [[package]]
 name = "openrlhf"
-version = "0.5.5.post2"
+version = "0.5.6"
 source = { editable = "." }
 dependencies = [
     { name = "accelerate" },
@@ -2026,6 +2050,7 @@ dependencies = [
     { name = "datasets" },
     { name = "deepspeed" },
     { name = "einops" },
+    { name = "evaluate" },
     { name = "isort" },
     { name = "jsonlines" },
     { name = "loralib" },
@@ -2062,6 +2087,7 @@ requires-dist = [
     { name = "datasets", specifier = ">=3.2.0" },
     { name = "deepspeed", specifier = "==0.15.0" },
     { name = "einops", specifier = ">=0.8.0" },
+    { name = "evaluate", specifier = ">=0.4.3" },
     { name = "isort", specifier = ">=5.13.2" },
     { name = "jsonlines", specifier = ">=4.0.0" },
     { name = "loralib", specifier = ">=0.1.2" },
