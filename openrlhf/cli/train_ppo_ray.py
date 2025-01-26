@@ -298,9 +298,7 @@ if __name__ == "__main__":
     parser.add_argument("--aux_loss_coef", type=float, default=0, help="MoE balancing loss")
     parser.add_argument("--adam_betas", type=float, nargs=2, default=(0.9, 0.95), help="Betas for Adam optimizer")
     parser.add_argument("--reward_clip_range", type=float, nargs=2, default=(-10, 10), help="Reward clip range")
-    parser.add_argument("--use_prm", action="store_true", default=False, help="Use PRM for PPO")
-    parser.add_argument("--placeholder_token", type=int, default=None)
-    parser.add_argument("--reward_tokens", type=int, nargs="*", default=None)
+
     # Reinforce
     parser.add_argument(
         "--advantage_estimator",
@@ -395,13 +393,5 @@ if __name__ == "__main__":
             args.flash_attn = True
         assert args.vllm_num_engines > 0, "Only support `--packing_samples` with vLLM."
         assert not args.pretrain_data, "`--pretrain_data` is not supported with `--packing_samples` yet."
-
-    if args.use_prm:
-        assert args.reward_tokens is not None, "reward_tokens should be provided for PRM"
-        assert args.placeholder_token is not None, "placeholder_token should be provided for PRM"
-        print(
-            f"the first token in reward_tokens ({args.reward_tokens[0]}) should be the positive token "
-            "and the second token should be the negative token."
-            )
 
     train(args)

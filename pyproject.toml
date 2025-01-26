@@ -1,51 +1,10 @@
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[project]
-name = "openrlhf"
-version = "0.5.6"
-description = "A Ray-based High-performance RLHF framework."
-readme = "README.md"
-requires-python = ">=3.10"
-dependencies = [
-    "accelerate>=1.2.1",
-    "bitsandbytes>=0.45.0",
-    "datasets>=3.2.0",
-    "deepspeed==0.15.0",
-    "einops>=0.8.0",
-    "isort>=5.13.2",
-    "jsonlines>=4.0.0",
-    "loralib>=0.1.2",
-    "optimum>=1.23.3",
-    "packaging>=24.2",
-    "peft>=0.14.0",
-    "qwen-vl-utils>=0.0.8",
-    "ray[default]==2.12.0",
-    "tensorboard>=2.18.0",
-    "torch>=2.5.1",
-    "torchmetrics>=1.6.1",
-    "torchvision>=0.19.0",
-    "tqdm>=4.67.1",
-    "transformers==4.46.3",
-    "transformers-stream-generator>=0.0.5",
-    "wandb>=0.19.1",
-    "wheel>=0.45.1",
+requires = [
+    "packaging",
+    "setuptools >= 49.4.0",
+    "wheel",
 ]
-
-[tool.hatch.build.targets.sdist]
-include = [
-  "openrlhf/",
-]
-
-[project.optional-dependencies]
-vllm = [
-    "vllm==0.6.5",
-]
-
-[[tool.uv.index]]
-url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple"
-default = true
+build-backend = "setuptools.build_meta"
 
 [tool.isort]
 profile = "black"  # black-compatible
@@ -56,6 +15,9 @@ sections = ["FUTURE", "STDLIB", "THIRDPARTY", "FIRSTPARTY", "LOCALFOLDER"]
 default_section = "THIRDPARTY"
 extend_skip = ["setup.py", "docs/source/conf.py"]
 
+
+[tool.black]
+line_length = 119
 
 [tool.ruff]
 line-length = 119
@@ -91,9 +53,4 @@ markers = [
     "docs: mark tests related to documentation (deselect with '-m \"not docs\"')",
     "skipduringci: marks tests that are skipped ci as they are addressed by Jenkins jobs but should be run to test user setups",
     "pleasefixme: marks tests that are broken and need fixing",
-]
-
-[dependency-groups]
-dev = [
-    "ipykernel>=6.29.5",
 ]

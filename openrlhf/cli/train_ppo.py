@@ -10,7 +10,7 @@ from transformers.trainer import get_scheduler
 from openrlhf.datasets import PromptDataset, SFTDataset
 from openrlhf.models import Actor, get_llm_for_sequence_regression
 from openrlhf.trainer import PPOTrainer
-from openrlhf.utils import blending_datasets, get_strategy, get_vl_processor
+from openrlhf.utils import blending_datasets, get_strategy, get_tokenizer
 
 
 def train(args):
@@ -75,8 +75,8 @@ def train(args):
     strategy.print(actor)
     strategy.print(critic)
 
-    # configure processor
-    processor = get_vl_processor(args.pretrain, actor.model, "left", strategy, use_fast=not args.disable_fast_tokenizer)
+    # configure tokenizer
+    tokenizer = get_tokenizer(args.pretrain, actor.model, "left", strategy, use_fast=not args.disable_fast_tokenizer)
 
     # load weights for reference actor
     initial_model = Actor(
@@ -130,10 +130,9 @@ def train(args):
         train_split=args.prompt_split,
     )
     prompts_data = prompts_data.select(range(min(args.max_samples, len(prompts_data))))
-    prompts_dataset = PromptDataset(prompts_data, processor, strategy, input_template=args.input_template)
+    prompts_dataset = PromptDataset(prompts_data, tokenizer, strategy, input_template=args.input_template)
 
     if args.pretrain_data:
-        raise NotImplementedError("Pretrain data is not supported currently.")
         pretrain_data = blending_datasets(
             args.pretrain_data,
             args.pretrain_data_probs,
@@ -242,7 +241,7 @@ def train(args):
         micro_train_batch_size=args.micro_train_batch_size,
         micro_rollout_batch_size=args.micro_rollout_batch_size,
         gradient_checkpointing=args.gradient_checkpointing,
-        processor=processor,
+        tokenizer=tokenizer,
         prompt_max_len=args.prompt_max_len,
         value_clip=args.value_clip,
         eps_clip=args.eps_clip,
@@ -259,8 +258,8 @@ def train(args):
         max_length=args.max_len,
         temperature=args.temperature,
         top_p=args.top_p,
-        pad_token_id=processor.tokenizer.pad_token_id,
-        eos_token_id=processor.tokenizer.eos_token_id,
+        pad_token_id=tokenizer.pad_token_id,
+        eos_token_id=tokenizer.eos_token_id,
         # remote reward model
         remote_rm_url=args.remote_rm_url,
         save_hf_ckpt=args.save_hf_ckpt,
@@ -272,14 +271,14 @@ def train(args):
     # save model checkpoint after fitting on only rank0
     strategy.save_model(
         ema_model if args.enable_ema else actor,
-        processor,
+        tokenizer,
         args.save_path,
     )
 
     if args.critic_pretrain and args.save_value_network:
         strategy.save_model(
             critic,
-            processor,
+            tokenizer,
             args.save_path + "_critic",
         )
 
@@ -303,7 +302,7 @@ if __name__ == "__main__":
     parser.add_argument("--rollout_batch_size", type=int, default=512)
     parser.add_argument("--micro_rollout_batch_size", type=int, default=8)
     parser.add_argument("--max_epochs", type=int, default=1)
-    parser.add_argument("--prompt_max_len", type=int, default=None, help="Max tokens for each prompt")
+    parser.add_argument("--prompt_max_len", type=int, default=1024, help="Max tokens for each prompt")
     parser.add_argument("--generate_max_len", type=int, default=1024, help="Max tokens to generate in PPO")
     parser.add_argument("--max_len", type=int, default=None, help="deprecated max_len")
     parser.add_argument("--max_samples", type=int, default=1000000)
@@ -400,6 +399,9 @@ if __name__ == "__main__":
     parser.add_argument("--pretrain_split", type=str, default="train")
     parser.add_argument("--input_key", type=str, default="input", help="JSON dataset key")
     parser.add_argument("--input_template", type=str, default=None)
+    parser.add_argument(
+        "--apply_chat_template", action="store_true", default=False, help="Use HF tokenizer chat template"
+    )
 
     # wandb parameters
     parser.add_argument("--use_wandb", type=str, default=None)

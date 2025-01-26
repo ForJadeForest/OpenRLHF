@@ -7,7 +7,7 @@ from torch.utils.data import Dataset
 
 from openrlhf.utils.utils import convert_token_to_id
 from .utils import zero_pad_sequences
-from ..trainer.ppo_utils.data_processor import DATA_PROCESSOR_MAP
+
 
 class ProcessRewardDataset(Dataset):
     """
@@ -22,19 +22,17 @@ class ProcessRewardDataset(Dataset):
     def __init__(
         self,
         dataset,
-        processor: Callable,
+        tokenizer: Callable,
         max_length: int,
         strategy,
         multiple_of=1,
     ) -> None:
         super().__init__()
-        self.processor = processor
+        self.tokenizer = tokenizer
         self.strategy = strategy
         self.max_length = max_length
         self.multiple_of = multiple_of
 
-        self.tokenizer = processor.tokenizer
-        self.data_processor = DATA_PROCESSOR_MAP[type(processor)](processor)
         # chat_template
         self.input_key = getattr(self.strategy.args, "input_key", None)
         self.label_key = getattr(self.strategy.args, "label_key", None)
@@ -52,7 +50,7 @@ class ProcessRewardDataset(Dataset):
         return length
 
     def __getitem__(self, idx):
-        inputs = self.data_processor(
+        input_token = self.tokenizer(
             self.inputs[idx],
             max_length=self.max_length,
             padding=False,
@@ -61,7 +59,7 @@ class ProcessRewardDataset(Dataset):
             add_special_tokens=False,
         )
 
-        input_ids = inputs.pop("input_ids")[0]
+        input_ids = input_token["input_ids"]
         label_values = self.labels[idx]
         assert isinstance(label_values, list), "labels should be a list of strings or numbers"
         if isinstance(label_values[0], str):
@@ -89,35 +87,29 @@ class ProcessRewardDataset(Dataset):
         # Step 3: Update labels at placeholder token positions
         labels = torch.full_like(input_ids, -100)
         labels[mask] = truncated_labels
-        attention_mask = inputs.pop("attention_mask")[0]
-        visual_inputs = inputs
+
         return (
             input_ids,
-            attention_mask,
+            input_token["attention_mask"],
             labels,
-            visual_inputs
         )
 
     def collate_fn(self, item_list):
         input_ids = []
         input_masks = []
         label_ids = []
-        visual_inputs = []
-        for input_id, input_mask, label_id, visual_input in item_list:
+        for input_id, input_mask, label_id in item_list:
             input_ids.append(input_id)
             input_masks.append(input_mask)
             label_ids.append(label_id)
-            visual_inputs.append(visual_input)
 
         padding_side = "right"
         input_ids = zero_pad_sequences(input_ids, side=padding_side, value=self.tokenizer.pad_token_id)
         input_masks = zero_pad_sequences(input_masks, side=padding_side)
         label_ids = zero_pad_sequences(label_ids, side=padding_side, value=self.tokenizer.pad_token_id)
-        visual_inputs = self.data_processor.make_input_batch(visual_inputs)
-        return input_ids, input_masks, label_ids, visual_inputs
+        return input_ids, input_masks, label_ids
 
     def packing_collate_fn(self, item_list):
-        raise NotImplementedError("Packing collate function is not implemented yet")
         input_ids = []
         input_att_masks = []
         input_seq_lens = []

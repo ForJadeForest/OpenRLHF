@@ -1,27 +1,8 @@
 import os
 
 from datasets import interleave_datasets, load_dataset, load_from_disk
-from transformers import AutoTokenizer, AutoProcessor, AutoModel
+from transformers import AutoTokenizer
 
-
-DEFAULT_PAD_TOKEN = "[PAD]"
-DEFAULT_EOS_TOKEN = "</s>"
-DEFAULT_BOS_TOKEN = "<s>"
-DEFAULT_UNK_TOKEN = "<unk>"
-
-
-def get_vl_processor(pretrain, model, padding_side="left", strategy=None, use_fast=True):
-    processor = AutoProcessor.from_pretrained(pretrain, trust_remote_code=True, use_fast=use_fast)
-    tokenizer = processor.tokenizer
-    tokenizer.padding_side = padding_side
-    # NOTE: When enable vLLM, do not resize_token_embeddings, or the vocab size will mismatch with vLLM.
-    # https://github.com/facebookresearch/llama-recipes/pull/196
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
-        tokenizer.pad_token_id = tokenizer.eos_token_id
-        model.config.pad_token_id = tokenizer.pad_token_id
-
-    return processor
 
 def get_tokenizer(pretrain, model, padding_side="left", strategy=None, use_fast=True):
     tokenizer = AutoTokenizer.from_pretrained(pretrain, trust_remote_code=True, use_fast=use_fast)
@@ -34,6 +15,7 @@ def get_tokenizer(pretrain, model, padding_side="left", strategy=None, use_fast=
         model.config.pad_token_id = tokenizer.pad_token_id
 
     return tokenizer
+
 
 def get_strategy(args):
     from openrlhf.utils.deepspeed import DeepspeedStrategy
@@ -139,19 +121,5 @@ def convert_token_to_id(token, tokenizer):
         token = tokenizer.encode(token, add_special_tokens=False)
         assert len(token) == 1
         return token[0]
-    elif isinstance(token, int):
-        return token
     else:
         raise ValueError("token should be int or str")
-
-def get_conditional_generation_cls(config):
-    model_type = config.model_type
-    model_architecture = AutoModel._model_mapping[type(config)].__name__
-    if not model_architecture.endswith("ForConditionalGeneration"):
-        if model_architecture.endswith("Model"):
-            model_architecture = model_architecture.replace("Model", "")
-        model_architecture += "ForConditionalGeneration"
-    import importlib
-    module = importlib.import_module(f".models.{model_type}.modeling_{model_type}",package="transformers")
-    model_cls = getattr(module, model_architecture)
-    return model_cls

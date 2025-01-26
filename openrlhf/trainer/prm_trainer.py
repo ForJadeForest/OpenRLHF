@@ -36,7 +36,7 @@ class ProcessRewardModelTrainer(ABC):
         max_norm: float = 1,
         batch_size: int = 1,
         max_epochs: int = 2,
-        processor=None,
+        tokenizer=None,
     ) -> None:
         super().__init__()
         self.strategy = strategy
@@ -47,11 +47,10 @@ class ProcessRewardModelTrainer(ABC):
         self.eval_dataloader = eval_dataloader
         self.scheduler = scheduler
         self.model = model
-        self.processor = processor
+        self.tokenizer = tokenizer
         self.optimizer = optim
         self.args = strategy.args
 
-        self.tokenizer = processor.tokenizer
         # set placeholder token
         self.placeholder_token_id = convert_token_to_id(strategy.args.placeholder_token, self.tokenizer)
         self.reward_token_ids = self.args.reward_tokens
@@ -124,14 +123,12 @@ class ProcessRewardModelTrainer(ABC):
             self.model.train()
             for data in self.train_dataloader:
                 if not self.packing_samples:
-                    inputs, attention_masks, labels, visual_inputs = data
+                    inputs, attention_masks, labels = data
                     inputs = inputs.to(torch.cuda.current_device())
                     attention_mask = attention_masks.to(torch.cuda.current_device())
                     labels = labels.to(torch.cuda.current_device())
-                    visual_inputs = {k: v.to(torch.cuda.current_device()) for k, v in visual_inputs.items()}
                     packed_seq_lens = None
                 else:
-                    raise NotImplementedError("Packing collate function is not implemented yet")
                     inputs, attention_masks, packed_seq_lens, labels = data
                     inputs = inputs.to(torch.cuda.current_device()).squeeze(1)
                     attention_mask = attention_masks.to(torch.cuda.current_device()).squeeze(1)
@@ -143,7 +140,6 @@ class ProcessRewardModelTrainer(ABC):
                     return_output=True,
                     ring_attn_group=self.strategy.ring_attn_group,
                     packed_seq_lens=packed_seq_lens,
-                    visual_inputs=visual_inputs,
                 )
 
                 # mixtral
@@ -218,14 +214,12 @@ class ProcessRewardModelTrainer(ABC):
 
             for data in eval_dataloader:
                 if not self.packing_samples:
-                    inputs, attention_masks, labels, visual_inputs = data
+                    inputs, attention_masks, labels = data
                     inputs = inputs.to(torch.cuda.current_device())
                     attention_mask = attention_masks.to(torch.cuda.current_device())
                     labels = labels.to(torch.cuda.current_device())
-                    visual_inputs = {k: v.to(torch.cuda.current_device()) for k, v in visual_inputs.items()}
                     packed_seq_lens = None
                 else:
-                    raise NotImplementedError("Packing collate function is not implemented yet")
                     inputs, attention_masks, packed_seq_lens, labels = data
                     inputs = inputs.to(torch.cuda.current_device()).squeeze(1)
                     attention_mask = attention_masks.to(torch.cuda.current_device()).squeeze(1)
@@ -237,7 +231,6 @@ class ProcessRewardModelTrainer(ABC):
                     return_output=True,
                     ring_attn_group=self.strategy.ring_attn_group,
                     packed_seq_lens=packed_seq_lens,
-                    visual_inputs=visual_inputs,
                 )
 
                 loss, acc = self.loss_fn(inputs, output.logits, labels, return_acc=True)
