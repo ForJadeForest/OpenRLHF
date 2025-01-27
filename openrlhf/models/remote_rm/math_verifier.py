@@ -5,6 +5,7 @@ import re
 from math_verify import parse, verify, LatexExtractionConfig
 from latex2sympy2_extended import NormalizationConfig
 from multiprocessing import Process, Queue
+import Levenshtein
 app = Flask(__name__)
 
 problem_pattern=r'<\|im_start\|>user\n(.*?)<\|im_end\|>'
@@ -26,6 +27,16 @@ def get_response_from_query(q:str):
 
 def verify_format(content):
     return re.match(format_pattern, content, re.DOTALL) is not None
+
+def find_similar_problem(problem):
+    max_sim = -1
+    target_problem = None
+    for p in problem_to_answer.keys():
+        sim = Levenshtein.ratio(problem, p)
+        if sim > max_sim:
+            max_sim = sim
+            target_problem = p
+    return target_problem
 
 def verify_math(input_queue,output_queue):
     while True:
@@ -74,7 +85,9 @@ def get_reward():
         if problem is None:
             return jsonify({"error": f"problem not found from {q}"}), 400
         if problem not in problem_to_answer:
-            return jsonify({"error": f"problem not exists: {problem}"}), 400
+            #This should not happen
+            print(f"problem not exists: {problem}")
+            problem = find_similar_problem(problem)
         answer = problem_to_answer[problem]
         response = get_response_from_query(q)
         if response is None:
