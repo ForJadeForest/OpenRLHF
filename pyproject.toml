@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "openrlhf"
-version = "0.5.5.post2"
+version = "0.5.6"
 description = "A Ray-based High-performance RLHF framework."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -14,9 +14,11 @@ dependencies = [
     "datasets>=3.2.0",
     "deepspeed==0.15.0",
     "einops>=0.8.0",
+    "flask>=3.1.0",
     "isort>=5.13.2",
     "jsonlines>=4.0.0",
     "loralib>=0.1.2",
+    "math-verify>=0.3.2",
     "optimum>=1.23.3",
     "packaging>=24.2",
     "peft>=0.14.0",
@@ -35,7 +37,7 @@ dependencies = [
 
 [project.optional-dependencies]
 vllm = [
-    "vllm==0.6.5",
+    "vllm==0.6.6.post1",
 ]
 
 [[tool.uv.index]]

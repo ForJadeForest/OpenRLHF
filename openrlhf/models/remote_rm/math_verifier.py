@@ -1,0 +1,116 @@
+from flask import Flask, request, jsonify
+from argparse import ArgumentParser
+import json
+import re
+from math_verify import parse, verify, LatexExtractionConfig
+from latex2sympy2_extended import NormalizationConfig
+from multiprocessing import Process, Queue
+app = Flask(__name__)
+
+problem_pattern=r'<\|im_start\|>user\n(.*?)<\|im_end\|>'
+format_pattern = r"^<think>.*?</think><answer>.*?</answer>$"
+response_prefix = r"<\|im_start\|>assistant\n"
+problem_to_answer = {}
+
+def get_problem_from_query(q):
+    problem = re.findall(problem_pattern, q, re.DOTALL)
+    if len(problem) == 0:
+        return None
+    return problem[0]
+
+def get_response_from_query(q:str):
+    pos = re.search(response_prefix, q)
+    if pos is None:
+        return None
+    return q[pos.end():].replace("<｜end▁of▁sentence｜>","")
+
+def verify_format(content):
+    return re.match(format_pattern, content, re.DOTALL) is not None
+
+def verify_math(input_queue,output_queue):
+    while True:
+        content,sol = input_queue.get()
+        gold_parsed = parse(sol, extraction_mode="first_match", extraction_config=[LatexExtractionConfig()])
+        if len(gold_parsed) != 0:
+            # We require the answer to be provided in correct latex (no malformed operators)
+            answer_parsed = parse(
+                content,
+                extraction_config=[
+                    LatexExtractionConfig(
+                        normalization_config=NormalizationConfig(
+                            nits=False,
+                            malformed_operators=False,
+                            basic_latex=True,
+                            equations=True,
+                            boxed=True,
+                            units=True,
+                        ),
+                        # Ensures that boxed is tried first
+                        boxed_match_priority=0,
+                        try_extract_without_anchor=False,
+                    )
+                ],
+                extraction_mode="first_match",
+            )
+            # Reward 1 if the content is the same as the ground truth, 0 otherwise
+            reward = float(verify(answer_parsed, gold_parsed))
+        else:
+            # If the gold solution is not parseable, we reward 1 to skip this example
+            reward = 1.0
+            print("Failed to parse gold solution: ", sol)
+
+        output_queue.put(reward)
+
+@app.route('/get_reward', methods=['POST'])
+def get_reward():
+    # 获取请求中的 JSON 数据
+    data = request.get_json()
+    # 检查是否有 'query' 字段
+    if 'query' not in data:
+        return jsonify({"error": "queries field is required"}), 400
+    rewards = []
+    for q in data['query']:
+        problem = get_problem_from_query(q)
+        if problem is None:
+            return jsonify({"error": f"problem not found from {q}"}), 400
+        if problem not in problem_to_answer:
+            return jsonify({"error": f"problem not exists: {problem}"}), 400
+        answer = problem_to_answer[problem]
+        response = get_response_from_query(q)
+        if response is None:
+            return jsonify({"error": f"response not found from {q}"}), 400
+        format_reward = float(verify_format(response))
+        input_queue.put((response, answer))
+        acc_reward = float(output_queue.get())
+        print(f"Query: {q}\n\nProblem: {problem}\n\n Answer: {answer}\n\n Response: {response}\n\n Format Reward: {format_reward}\n\n Acc Reward: {acc_reward}\n\n")
+        rewards.append(format_reward+acc_reward)
+    # 返回包含 rewards 的响应
+    return jsonify({"rewards": rewards})
+
+if __name__ == '__main__':
+    parser = ArgumentParser()
+    parser.add_argument("--dataset", type=str, default="math_dataset", help="Dataset to use")
+    args = parser.parse_args()
+    with open(args.dataset, 'r') as f:
+        dataset = json.load(f)
+    
+    for item in dataset:
+        query = item['prompt']
+        
+        problem = get_problem_from_query(query)
+        if problem is None:
+            raise ValueError(f"Problem not found in query: {query}")
+        answer = item['answer'].strip()
+        #we require the answer to be in latex format
+        if answer[0] != '$':
+            answer = '$' + answer + '$'
+        problem_to_answer[problem] = answer
+
+    #math_verify can only run in main thread
+    input_queue = Queue()
+    output_queue = Queue()
+    p = Process(target=verify_math, args=(input_queue, output_queue))
+    p.start()
+
+    app.run(host='0.0.0.0', port=5000, debug=False,use_reloader=False)
+    p.kill()

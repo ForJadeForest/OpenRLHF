@@ -16,7 +16,11 @@ def request_api_wrapper(url, data, score_key="rewards", try_max_times=5):
     for _ in range(try_max_times):
         try:
             response = requests.post(url=url, json=data, headers=headers, timeout=180)
-            response.raise_for_status()  # Raise an HTTPError for bad responses
+            status_code = response.status_code
+            if status_code != 200:
+                error_info = f"Request error, status code: {status_code}, response: {response.text}"
+                logger.info(error_info)
+                response.raise_for_status()
             response = response.json()
             assert score_key in response, f"{score_key} not in {response}"
             return response.get(score_key)
@@ -47,6 +51,12 @@ def remote_rm_fn_ray(api_url, queries, score_key="rewards"):
 
 if __name__ == "__main__":
     # test utils
-    url = "http:xxx/get_rm_score"
-    score = remote_rm_fn(url, ["example query"], ["example response"])
+    url = "http://127.0.0.1:5000/get_reward"
+    query="""<|im_start|>system
+A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer. The reasoning process and answer are enclosed within <think> </think> and <answer> </answer> tags, respectively, i.e., <think> reasoning process here </think><answer> answer here </answer><|im_end|>
+<|im_start|>user
+How many vertical asymptotes does the graph of $y=\\frac{2}{x^2+x-6}$ have?<|im_end|>
+<|im_start|>assistant
+<think> Since $1+1=2$ </think><answer>$2$</answer><｜end▁of▁sentence｜>"""
+    score = remote_rm_fn(url, [query])
     print(score)
