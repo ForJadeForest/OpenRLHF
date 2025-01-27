@@ -8,9 +8,6 @@ from multiprocessing import Process, Queue
 import Levenshtein
 app = Flask(__name__)
 
-problem_pattern=r'<\|im_start\|>user\n(.*?)<\|im_end\|>'
-format_pattern = r"^<think>.*?</think><answer>.*?</answer>$"
-response_prefix = r"<\|im_start\|>assistant\n"
 problem_to_answer = {}
 
 def get_problem_from_query(q):
@@ -23,7 +20,7 @@ def get_response_from_query(q:str):
     pos = re.search(response_prefix, q)
     if pos is None:
         return None
-    return q[pos.end():].replace("<｜end▁of▁sentence｜>","")
+    return q[pos.end():].strip().replace(end_of_sentence,"")
 
 def verify_format(content):
     return re.match(format_pattern, content, re.DOTALL) is not None
@@ -89,7 +86,7 @@ def get_reward():
             print(f"problem not exists: {problem}")
             problem = find_similar_problem(problem)
         answer = problem_to_answer[problem]
-        response = get_response_from_query(q)
+        response = get_response_from_query(q) or q
         if response is None:
             return jsonify({"error": f"response not found from {q}"}), 400
         format_reward = float(verify_format(response))
@@ -106,7 +103,16 @@ if __name__ == '__main__':
     args = parser.parse_args()
     with open(args.dataset, 'r') as f:
         dataset = json.load(f)
-    
+    if "chatml" in args.dataset:
+        problem_pattern=r'<\|im_start\|>user\n(.*?)<\|im_end\|>'
+        format_pattern = r"^<think>.*?</think><answer>.*?</answer>$"
+        response_prefix = r"<\|im_start\|>assistant\n"
+        end_of_sentence = "<|im_end|>"
+    elif "qwen1" in args.dataset:
+        problem_pattern=r'｜User｜>(.*?)<｜Assistant｜>'
+        format_pattern = r"^<think>.*?</think><answer>.*?</answer>$"
+        response_prefix = r"<｜Assistant｜>"
+        end_of_sentence = "<｜end▁of▁sentence｜>"
     for item in dataset:
         query = item['prompt']
         

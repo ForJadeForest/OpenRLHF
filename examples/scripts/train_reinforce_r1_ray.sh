@@ -1,6 +1,6 @@
 # reinforce++
-export DATASET="/root/projects/OpenRLHF/data/mathlv345_9k.json"
-export MODEL="DeepSeek-R1-Distill-Qwen-1.5B"
+export DATASET="/root/projects/OpenRLHF/data/mathlv345_8k_chatml.json"
+export MODEL="Qwen2.5-Math-1.5B-Instruct"
 python -m openrlhf.models.remote_rm.math_verifier --dataset $DATASET > remote_rm.log 2>&1 &
 childpid=$!
 
@@ -10,15 +10,16 @@ ray job submit --address="http://127.0.0.1:8265" \
    --runtime-env-json='{"working_dir": "/root/projects/OpenRLHF"}' \
    -- python3 -m openrlhf.cli.train_ppo_ray \
    --ref_num_nodes 1 \
-   --ref_num_gpus_per_node 2 \
+   --ref_num_gpus_per_node 4 \
    --remote_rm_url http://127.0.0.1:5000//get_reward \
    --actor_num_nodes 1 \
    --actor_num_gpus_per_node 4 \
-   --vllm_num_engines 2 \
+   --vllm_num_engines 4 \
    --vllm_tensor_parallel_size 1 \
+   --colocate_actor_ref \
    --pretrain /root/projects/OpenRLHF/ckpts/${MODEL} \
    --save_path /root/projects/OpenRLHF/ckpts/${MODEL}-reinforce \
-   --micro_train_batch_size 4 \
+   --micro_train_batch_size 2 \
    --train_batch_size 128 \
    --micro_rollout_batch_size 4 \
    --rollout_batch_size 1024 \
