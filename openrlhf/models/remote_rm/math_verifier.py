@@ -103,16 +103,24 @@ if __name__ == '__main__':
     args = parser.parse_args()
     with open(args.dataset, 'r') as f:
         dataset = json.load(f)
-    if "chatml" in args.dataset:
+    dataset_name = args.dataset.split('.')[0]
+    if dataset_name.endswith("chatml"):
         problem_pattern=r'<\|im_start\|>user\n(.*?)<\|im_end\|>'
         format_pattern = r"^<think>.*?</think><answer>.*?</answer>$"
         response_prefix = r"<\|im_start\|>assistant\n"
         end_of_sentence = "<|im_end|>"
-    elif "qwen1" in args.dataset:
+    elif dataset_name.endswith("qwen1"):
         problem_pattern=r'｜User｜>(.*?)<｜Assistant｜>'
         format_pattern = r"^<think>.*?</think><answer>.*?</answer>$"
         response_prefix = r"<｜Assistant｜>"
         end_of_sentence = "<｜end▁of▁sentence｜>"
+    elif dataset_name.endswith("base"):
+        problem_pattern=r'User: (.*?)\n\nAssistant:'
+        format_pattern = r"^<think>.*?</think><answer>.*?</answer>$"
+        response_prefix = r"Assistant: "
+        end_of_sentence = ""
+    else:
+        raise ValueError(f"Unknown chat format: {args.dataset}")
     for item in dataset:
         query = item['prompt']
         

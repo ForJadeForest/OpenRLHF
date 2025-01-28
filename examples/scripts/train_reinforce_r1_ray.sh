@@ -1,6 +1,6 @@
 # reinforce++
-export DATASET="/root/projects/OpenRLHF/data/mathlv345_8k_chatml.json"
-export MODEL="Qwen2.5-Math-1.5B-Instruct"
+export DATASET="/root/projects/OpenRLHF/data/mathlv345_8k_base.json"
+export MODEL="Qwen2.5-Math-1.5B"
 python -m openrlhf.models.remote_rm.math_verifier --dataset $DATASET > remote_rm.log 2>&1 &
 childpid=$!
 
@@ -40,8 +40,9 @@ ray job submit --address="http://127.0.0.1:8265" \
    --flash_attn \
    --gradient_checkpointing \
    --packing_samples \
-   --save_steps 4 \
+   --save_steps 1 \
    --ckpt_path /root/projects/OpenRLHF/ckpts/${MODEL}-reinforce_ckpts \
+   --save_hf_ckpt \
    --use_wandb 9aeddea3b60542704fd5cd44d4c4a1d1d911ce54 \
    --wandb_run_name ${MODEL}-reinforce
 
