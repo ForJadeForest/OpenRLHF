@@ -17,10 +17,14 @@ def get_problem_from_query(q):
     return problem[0]
 
 def get_response_from_query(q:str):
+    ends_of_sentence = ["<|im_end|>","<｜end▁of▁sentence｜>","<|endoftext|>"]
     pos = re.search(response_prefix, q)
     if pos is None:
         return None
-    return q[pos.end():].strip().replace(end_of_sentence,"")
+    response = q[pos.end():]
+    for e in ends_of_sentence:
+        response = response.replace(e,"")
+    return response.strip()
 
 def verify_format(content):
     return re.match(format_pattern, content, re.DOTALL) is not None
@@ -61,7 +65,11 @@ def verify_math(input_queue,output_queue):
                 extraction_mode="first_match",
             )
             # Reward 1 if the content is the same as the ground truth, 0 otherwise
-            reward = float(verify(answer_parsed, gold_parsed))
+            try:
+                reward = float(verify(answer_parsed, gold_parsed))
+            except Exception as e:
+                reward = 1.0
+                print("Failed to verify: ",e)
         else:
             # If the gold solution is not parseable, we reward 1 to skip this example
             reward = 1.0
@@ -93,7 +101,7 @@ def get_reward():
         input_queue.put((response, answer))
         acc_reward = float(output_queue.get())
         print(f"Query: {q}\n\nProblem: {problem}\n\n Answer: {answer}\n\n Response: {response}\n\n Format Reward: {format_reward}\n\n Acc Reward: {acc_reward}\n\n")
-        rewards.append(format_reward+acc_reward)
+        rewards.append(0*format_reward+acc_reward)
     # 返回包含 rewards 的响应
     return jsonify({"rewards": rewards})
 
@@ -104,21 +112,19 @@ if __name__ == '__main__':
     with open(args.dataset, 'r') as f:
         dataset = json.load(f)
     dataset_name = args.dataset.split('.')[0]
+    
     if dataset_name.endswith("chatml"):
         problem_pattern=r'<\|im_start\|>user\n(.*?)<\|im_end\|>'
         format_pattern = r"^<think>.*?</think><answer>.*?</answer>$"
         response_prefix = r"<\|im_start\|>assistant\n"
-        end_of_sentence = "<|im_end|>"
     elif dataset_name.endswith("qwen1"):
         problem_pattern=r'｜User｜>(.*?)<｜Assistant｜>'
         format_pattern = r"^<think>.*?</think><answer>.*?</answer>$"
         response_prefix = r"<｜Assistant｜>"
-        end_of_sentence = "<｜end▁of▁sentence｜>"
     elif dataset_name.endswith("base"):
         problem_pattern=r'User: (.*?)\n\nAssistant:'
         format_pattern = r"^<think>.*?</think><answer>.*?</answer>$"
         response_prefix = r"Assistant: "
-        end_of_sentence = ""
     else:
         raise ValueError(f"Unknown chat format: {args.dataset}")
     for item in dataset:
