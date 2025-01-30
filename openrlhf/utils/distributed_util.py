@@ -12,7 +12,7 @@ from torch.distributed.distributed_c10d import (
     default_pg_timeout,
     rendezvous,
 )
-
+from contextlib import contextmanager
 
 # Copy from pytorch to allow creating multiple main groups.
 # https://github.com/pytorch/pytorch/blob/main/torch/distributed/distributed_c10d.py
@@ -70,3 +70,15 @@ def init_process_group(
     _world.pg_group_ranks[pg] = {i: i for i in range(world_size)}
 
     return pg
+
+@contextmanager
+def pdb():
+    local_rank = torch.distributed.get_rank()
+    if local_rank not in [-1,0]:
+        torch.distributed.barrier()
+    else:
+        import pdb;
+        pdb.set_trace()
+    yield
+    if local_rank in [-1,0]:
+        torch.distributed.barrier()
