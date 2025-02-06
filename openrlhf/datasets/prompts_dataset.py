@@ -33,10 +33,15 @@ class PromptDataset(Dataset):
         # chat_template
         self.input_template = input_template
         input_key = getattr(self.strategy.args, "input_key", None)
-
+        answer_key = getattr(self.strategy.args, "answer_key", None)
+        if answer_key is not None:
+            self.answers = []
         self.prompts = []
         for data in tqdm(dataset, desc="Preprocessing data", disable=not self.strategy.is_rank_0()):
             prompt = preprocess_data(data, input_template, input_key)
+            if answer_key is not None:
+                answer = data[answer_key]
+                self.answers.append(answer)
             self.prompts.append(prompt)
 
     def __len__(self):
@@ -44,4 +49,7 @@ class PromptDataset(Dataset):
         return length
 
     def __getitem__(self, idx):
-        return self.prompts[idx]
+        if self.answers is not None:
+            return self.prompts[idx], self.answers[idx]
+        else:
+            return self.prompts[idx]
