@@ -31,6 +31,10 @@ dependencies = [
     "transformers-stream-generator>=0.0.5",
     "wandb>=0.19.1",
     "wheel>=0.45.1",
+    "fastapi>=0.68.0",
+    "uvicorn>=0.15.0",
+    "latex2sympy2-extended>=1.0.0",
+    "math-verify>=1.0.0",
 ]
 
 [tool.hatch.build.targets.sdist]
