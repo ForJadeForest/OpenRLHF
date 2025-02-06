@@ -213,6 +213,7 @@ if __name__ == "__main__":
         help="tensor parallel size of vLLM Engine for multi-GPU inference",
     )
     parser.add_argument("--vllm_sync_backend", type=str, default="nccl", help="DeepSpeed -> vLLM weight sync backend")
+    parser.add_argument("--vllm_sync_with_ray", action="store_true", default=False)
     parser.add_argument("--enable_prefix_caching", action="store_true", default=False)
     parser.add_argument("--enforce_eager", action="store_true", default=False, help="Disable CUDA graph in vLLM")
 
@@ -374,8 +375,10 @@ if __name__ == "__main__":
         args.remote_rm_url = args.remote_rm_url.split(",")
 
     if args.vllm_num_engines >= 1 and args.enable_prefix_caching:
-        args.enable_prefix_caching = False
-        print("[Warning] Disable prefix cache because vLLM updates weights without updating the old KV Cache.")
+        import vllm
+        if vllm.__version__ < "0.7.0":
+            args.enable_prefix_caching = False
+            print("[Warning] Disable prefix cache because vLLM updates weights without updating the old KV Cache for vLLM version below 0.7.0.")
 
     if args.input_template and "{}" not in args.input_template:
         print("[Warning] {} not in args.input_template, set to None")
