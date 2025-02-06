@@ -11,7 +11,10 @@ DEFAULT_UNK_TOKEN = "<unk>"
 
 
 def get_vl_processor(pretrain, model, padding_side="left", strategy=None, use_fast=True):
-    processor = AutoProcessor.from_pretrained(pretrain, trust_remote_code=True, use_fast=use_fast)
+    # TODO: Maybe better max_pixels set methods for other vl model
+    min_pixels = os.getenv("MIN_PIXELS", 4*28*28)
+    max_pixels = os.getenv("MAX_PIXELS", 640*28*28)
+    processor = AutoProcessor.from_pretrained(pretrain, trust_remote_code=True, use_fast=use_fast, min_pixels=min_pixels, max_pixels=max_pixels)
     tokenizer = processor.tokenizer
     tokenizer.padding_side = padding_side
     # NOTE: When enable vLLM, do not resize_token_embeddings, or the vocab size will mismatch with vLLM.

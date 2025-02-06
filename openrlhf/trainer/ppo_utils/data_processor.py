@@ -1,10 +1,12 @@
-from qwen_vl_utils import process_vision_info
+import json
+import os
 from abc import ABC, abstractmethod
 from typing import List, Optional, Union
-from transformers.processing_utils import ProcessorMixin
+
 import torch
+from qwen_vl_utils import process_vision_info
 from transformers import Qwen2VLProcessor
-import json
+from transformers.processing_utils import ProcessorMixin
 
 
 class BaseDataProcessor(ABC):
@@ -19,7 +21,7 @@ class BaseDataProcessor(ABC):
         max_length: int,
         padding: bool = True,
         device: Optional[Union[str, torch.device]] = None,
-        return_tensors:Optional[str] = "pt",
+        return_tensors: Optional[str] = "pt",
         add_special_tokens: Optional[bool] = False,
         truncation: Optional[bool] = True,
     ) -> dict:
@@ -70,6 +72,35 @@ class BaseDataProcessor(ABC):
     def eos_token_id(self) -> int:
         return self.processor.tokenizer.eos_token_id
 
+    @property
+    def tokenizer(self):
+        return self.processor.tokenizer
+
+
+def add_pixel_bounds(messages):
+    # 默认的像素范围
+    DEFAULT_MIN_PIXELS = os.getenv("MIN_PIXELS", 4 * 28 * 28)
+    DEFAULT_MAX_PIXELS = os.getenv("MAX_PIXELS", 640 * 28 * 28)
+
+    def process_content(content):
+        if isinstance(content, list):
+            # 处理content列表中的每个元素
+            for item in content:
+                if isinstance(item, dict) and item.get("type") == "image":
+                    # 如果是image类型且缺少像素范围属性，则添加
+                    if "min_pixels" not in item:
+                        item["min_pixels"] = DEFAULT_MIN_PIXELS
+                    if "max_pixels" not in item:
+                        item["max_pixels"] = DEFAULT_MAX_PIXELS
+        return content
+
+    # 处理messages中的每个消息
+    for message in messages:
+        for msg in message:
+            msg["content"] = process_content(msg["content"])
+    # print(messages)
+    return messages
+
 
 class Qwen2VLDataProcessor(BaseDataProcessor):
     def __call__(
@@ -87,6 +118,7 @@ class Qwen2VLDataProcessor(BaseDataProcessor):
         texts = processor.apply_chat_template(
             messages, tokenize=False, add_generation_prompt=True
         )
+        messages = add_pixel_bounds(messages)
         image_inputs, video_inputs = process_vision_info(messages)
 
         batch = processor(
@@ -177,6 +209,7 @@ class Qwen2VLDataProcessor(BaseDataProcessor):
         return batch_kwargs
 
     def _get_images_from_messages(self, messages: List[dict]) -> List[dict]:
+        messages = add_pixel_bounds(messages)
         image_inputs, _ = process_vision_info(messages)
         return image_inputs
 
