@@ -10,7 +10,7 @@ import uvicorn
 
 # 引入相关依赖
 from latex2sympy2_extended import NormalizationConfig
-from math_verify import LatexExtractionConfig, parse, verify
+from openrlhf.models.remote_rm.math_verifier import LatexExtractionConfig, parse, verify
 
 # 配置日志记录
 logging.basicConfig(
