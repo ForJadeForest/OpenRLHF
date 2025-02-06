@@ -8,6 +8,13 @@ from transformers import AutoTokenizer
 
 SYSTEM_PROMPT='You are a helpful assistant good at solving math problems with step-by-step reasoning. You should first thinks about the reasoning process in the mind and then provides the user with the answer. Your answer must be in latex format and wrapped in $...$.The reasoning process and answer are enclosed within <think> </think> and <answer> </answer> tags, respectively, i.e., <think> Since $1+1=2$, so the answer is $2$. </think><answer> $2$ </answer>, which means your output should start with <think> and end with </answer>.'
 
+SYSTEM_PROMPT_BASE=SYSTEM_PROMPT = (
+    "A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant "
+    "first thinks about the reasoning process in the mind and then provides the user with the answer. The answer is in latex format and wrapped in $...$."
+    "The reasoning process and answer are enclosed within <think> </think> and <answer> </answer> tags, respectively, i.e., "
+    "<think> Since $1+1=2$, so the answer is $2$. </think><answer> $2$ </answer>, which means assistant's output should start with <think> and end with </answer>.\nUser: __PROMPT__\n\nAssistant: "
+)
+
 def get_dataset(dataset,split=None):
     data_dir = dataset.split("@")[1].strip() if "@" in dataset else None
     dataset = dataset.split("@")[0].strip()
@@ -77,12 +84,17 @@ if __name__ == "__main__":
     model = LLM(args.model,trust_remote_code=True)
     tokenizer = AutoTokenizer.from_pretrained(args.model)
     messages = []
+    is_base = "base" in args.model.lower()
     for d in data:
         problem = d[args.problem_key]
-        message = [{"role":"system","content":args.system_prompt},{"role":"user","content":problem}]
+        if not is_base:
+            message = [{"role":"system","content":args.system_prompt},{"role":"user","content":problem}]
+        else:
+            message = SYSTEM_PROMPT_BASE.replace("__PROMPT__",problem)
         messages.append(message)
-    messages = tokenizer.apply_chat_template(messages,tokenize=False,add_generation_prompt=True)
-    sampling_params = SamplingParams(temperature=0,max_tokens=3000)
+    if not is_base:
+        messages = tokenizer.apply_chat_template(messages,tokenize=False,add_generation_prompt=True)
+    sampling_params = SamplingParams(temperature=0,max_tokens=3000,skip_special_tokens=False)
     outputs = model.generate(messages,sampling_params)
     results = []
     for output,d in zip(outputs,data):
