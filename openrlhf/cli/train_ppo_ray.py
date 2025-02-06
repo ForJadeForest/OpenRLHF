@@ -335,6 +335,7 @@ if __name__ == "__main__":
     parser.add_argument("--pretrain_split", type=str, default="train")
 
     parser.add_argument("--input_key", type=str, default="input", help="JSON dataset key")
+    parser.add_argument("--answer_key", type=str, default="answer")
     parser.add_argument("--input_template", type=str, default=None)
     parser.add_argument(
         "--apply_chat_template", action="store_true", default=False, help="Use HF tokenizer chat template"
