@@ -1,3 +1,4 @@
+import os
 import time
 from abc import ABC
 from copy import deepcopy
@@ -119,6 +120,7 @@ class Samples:
     response_length: torch.Tensor
     total_length: torch.Tensor
     visual_inputs: Optional[dict]
+    answers: Optional[list]
 
 
 class NaiveExperienceMaker(ABC):
@@ -146,6 +148,7 @@ class NaiveExperienceMaker(ABC):
         self.remote_rm_url = remote_rm_url
         self.initial_model = initial_model
         self.data_processor = data_processor
+        self.tokenizer = self.data_processor.tokenizer
         self.prompt_max_len = prompt_max_len
         self.kl_ctl = kl_controller
         self.strategy = strategy
@@ -155,7 +158,7 @@ class NaiveExperienceMaker(ABC):
 
 
     @torch.no_grad()
-    def make_experience_list(self, all_prompts: Union[str, List[str]], **generate_kwargs) -> List[Experience]:
+    def make_experience_list(self, all_prompts:Union[str, List[str], List[List[str]]],  **generate_kwargs) -> List[Experience]:   
         """
         Make a list of experience with the micro_rollout_batch_size.
 
@@ -225,18 +228,24 @@ class NaiveExperienceMaker(ABC):
         return experiences
 
     @torch.no_grad()
-    def generate_samples(self, all_prompts: List[str], **generate_kwargs) -> List[Samples]:
+    def generate_samples(self, all_prompts: Union[List[str], List[List[str]]], **generate_kwargs) -> List[Samples]:
         """
         Generate samples and return in batches.
         """
         assert not getattr(self, "packing_samples", False)
         args = self.strategy.args
         self.actor.eval()
+
+        answers = None
+        if isinstance(all_prompts[0], list):
+            all_prompts, answers = all_prompts
+
         # sample multiple response
         all_prompts = sum([[prompt] * args.n_samples_per_prompt for prompt in all_prompts], [])
         samples_list = []
         for i in range(0, len(all_prompts), args.micro_rollout_batch_size):
             prompts = all_prompts[i : i + args.micro_rollout_batch_size]
+            batch_answers = answers[i : i + args.micro_rollout_batch_size] if answers else None
             inputs = self.data_processor(prompts, self.prompt_max_len, device="cuda")
             sequences, attention_mask, action_mask = self.actor.generate(inputs, **generate_kwargs)
             visual_inputs = {}
@@ -252,6 +261,7 @@ class NaiveExperienceMaker(ABC):
                 response_length=action_mask.float().sum(dim=-1),
                 total_length=attention_mask.float().sum(dim=-1),
                 visual_inputs=visual_inputs,
+                answers=batch_answers,
             )
             samples_list.append(samples)
         return samples_list
@@ -502,6 +512,7 @@ class RemoteExperienceMaker(NaiveExperienceMaker):
         num_actions = samples.num_actions
         packed_seq_lens = samples.packed_seq_lens
         visual_inputs = samples.visual_inputs
+        answers = samples.answers
 
         start = time.time()
         sequences_cpu, attention_mask_cpu = (
@@ -539,7 +550,6 @@ class RemoteExperienceMaker(NaiveExperienceMaker):
                 r_refs.append(rm.forward.remote(sequences_cpu, attention_mask_cpu, packed_seq_lens=packed_seq_lens, visual_inputs=visual_inputs_cpu))
         else:
             # remote RM
-            raise NotImplementedError("Remote RM is not supported")
             if not self.packing_samples:
                 queries = self.tokenizer.batch_decode(sequences_cpu, skip_special_tokens=False)
             else:
@@ -552,7 +562,7 @@ class RemoteExperienceMaker(NaiveExperienceMaker):
                 queries = self.tokenizer.batch_decode(sequences_list, skip_special_tokens=False)
 
             for rm in self.remote_rm_url:
-                r = remote_rm_fn_ray.remote(rm, queries=queries)
+                r = remote_rm_fn_ray.remote(rm, queries=queries, answers=answers)
                 r_refs.append(r)
 
         # log probs
@@ -626,12 +636,16 @@ class RemoteExperienceMaker(NaiveExperienceMaker):
         self.actor.train()  # reset model state
         return experience
 
-    def _generate_vllm(self, all_prompts: List[str], **kwargs) -> List[Samples]:
+    def _generate_vllm(self, all_prompts: Union[List[str], List[List[str]]], **kwargs) -> List[Samples]:
         from vllm import SamplingParams
 
         # round-robin load balance
         rank = torch.distributed.get_rank()
         world_size = torch.distributed.get_world_size()
+
+        answers = None
+        if isinstance(all_prompts[0], list):
+            all_prompts, answers = all_prompts
 
         # Select LLM engines: assign each rank an engine, or cycle through engines if world_size < engine_count
         if len(self.vllm_engines) <= world_size:
@@ -653,6 +667,8 @@ class RemoteExperienceMaker(NaiveExperienceMaker):
 
         # Expand prompt list based on the number of samples per prompt
         all_prompts = sum([[prompt] * args.n_samples_per_prompt for prompt in all_prompts], [])
+        if answers is not None:
+            answers = sum([[ans] * args.n_samples_per_prompt for ans in answers], [])
 
         # Distribute requests to engines and collect responses to outputs
         all_output_refs = []
@@ -662,7 +678,14 @@ class RemoteExperienceMaker(NaiveExperienceMaker):
             if messages:
                 prompts = self.data_processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
                 images = [self.data_processor.get_images_from_messages(m) for m in messages]
-                vllm_inputs = [{"prompt":p,"multi_modal_data":{"image":imgs}} for p,imgs in zip(prompts,images)]
+                vllm_inputs = [{
+                        "prompt":p,
+                        "multi_modal_data":{"image":imgs} if imgs else None,
+                        "mm_processor_kwargs": {
+                            "min_pixels": os.getenv("MIN_PIXELS", 4 * 28 * 28),
+                            "max_pixels": os.getenv("MAX_PIXELS", 640 * 28 * 28),
+                        },
+                    } for p,imgs in zip(prompts,images)]
                 all_output_refs.append(
                     llm.generate.remote(vllm_inputs,sampling_params=sampling_params)
                 )
@@ -674,6 +697,7 @@ class RemoteExperienceMaker(NaiveExperienceMaker):
         for i in range(0, len(all_outputs), args.micro_rollout_batch_size):
             outputs = all_outputs[i : i + self.strategy.args.micro_rollout_batch_size]
             raw_messages = all_prompts[i : i + self.strategy.args.micro_rollout_batch_size]
+            batch_answers = answers[i : i + self.strategy.args.micro_rollout_batch_size] if answers else None
             if not self.packing_samples:
                 # NOTE: concat all outputs to following format:
                 #
@@ -721,6 +745,7 @@ class RemoteExperienceMaker(NaiveExperienceMaker):
                         response_length=action_mask.float().sum(dim=-1),
                         total_length=attention_mask.float().sum(dim=-1),
                         visual_inputs=visual_inputs,
+                        answers=batch_answers,
                     )
                 )
             else:
