@@ -87,11 +87,10 @@ class CriticModelRayActor(BasePPORole):
         strategy.print("reward normalization status: {}".format(strategy.args.normalize_reward))
         strategy.print("mean: {}, std {}".format(critic.mean, critic.std))
 
-        # configure tokenizer
-        if strategy.args.save_value_network:
-            self.processor = get_vl_processor(
-                pretrain, critic, "left", strategy, use_fast=not strategy.args.disable_fast_tokenizer
-            )
+        # configure tokenizer for critic
+        self.processor = get_vl_processor(
+            pretrain, critic, "left", strategy, use_fast=not strategy.args.disable_fast_tokenizer
+        )
 
         # configure optimizer
         critic_optim = strategy.create_optimizer(
@@ -138,6 +137,7 @@ class CriticModelRayActor(BasePPORole):
             critic_optim=self.critic_optim,
             actor_scheduler=None,
             critic_scheduler=self.critic_scheduler,
+            processor=self.processor,
             max_epochs=args.max_epochs,
             micro_train_batch_size=args.micro_train_batch_size,
             micro_rollout_batch_size=args.micro_rollout_batch_size,
@@ -159,6 +159,7 @@ class CriticModelRayActor(BasePPORole):
         device = torch.cuda.current_device()
         self.critic.eval()
         with torch.no_grad():
+            visual_inputs = {k: v.to(device) for k, v in visual_inputs.items()}
             value = self.critic(
                 sequences.to(device), num_actions, attention_mask.to(device), packed_seq_lens=packed_seq_lens, visual_inputs=visual_inputs
             )

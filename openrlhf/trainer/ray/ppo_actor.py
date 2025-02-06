@@ -178,7 +178,7 @@ class ActorPPOTrainer(PPOTrainer):
             save_path = os.path.join(args.ckpt_path, f"{tag}_hf")
             self.strategy.save_model(
                 self.ema_model if args.enable_ema else self.actor,
-                self.tokenizer,
+                self.processor,
                 save_path,
             )
         # wait
@@ -421,6 +421,6 @@ class ActorModelRayActor(BasePPORole):
         # save model checkpoint after fitting on only rank0
         self.strategy.save_model(
             self.ema_model if args.enable_ema else self.actor,
-            self.tokenizer,
+            self.processor,
             args.save_path,
         )
